@@ -6927,6 +6927,9 @@ void init_idle(struct task_struct *idle, int cpu)
 
 	raw_spin_lock_irqsave(&idle->pi_lock, flags);
 	raw_spin_lock(&rq->lock);
+	preempt_disable();
+	rq_unlock_irq(rq, &rf);
+	sched_preempt_enable_no_resched();
 
 	idle->state = TASK_RUNNING;
 	idle->se.exec_start = sched_clock();
