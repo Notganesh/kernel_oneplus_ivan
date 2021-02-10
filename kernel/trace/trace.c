@@ -2328,6 +2328,7 @@ trace_event_buffer_lock_reserve(struct ring_buffer **current_rb,
                 #else
 		if ((len < (PAGE_SIZE - sizeof(*entry))) && val == 1) {
                 #endif /*OPLUS_BUG_STABILITY*/
+		if ((len < (PAGE_SIZE - sizeof(*entry))) && val == 1) {
 			trace_event_setup(entry, type, flags, pc);
 			entry->array[0] = len;
 			return entry;
