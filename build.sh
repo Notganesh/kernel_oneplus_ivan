@@ -48,8 +48,8 @@ fi
 git clone --depth=1 https://github.com/oneplus-mt6877/AnyKernel3.git AnyKernel
 cp out/arch/arm64/boot/Image.gz-dtb AnyKernel
 cd AnyKernel
-zip -r9 Extortion-S-OSS-KERNEL-IVAN.zip *
-curl --upload-file "EXTORTION-S-OSS-KERNEL-IVAN.zip" https://free.keep.sh
+zip -r9 TEST-OSS-KERNEL-IVAN.zip *
+curl --upload-file "TEST-OSS-KERNEL-IVAN.zip" https://free.keep.sh
 }
 
 compile
