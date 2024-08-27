@@ -2666,9 +2666,6 @@ handle_err:
 	return err;
 }
 
-	return err;
-}
-
 static int fixup_pi_state_owner(u32 __user *uaddr, struct futex_q *q,
 				struct task_struct *argowner)
 {
