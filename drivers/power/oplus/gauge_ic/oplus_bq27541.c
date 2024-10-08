@@ -1,9 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
-#include <linux/version.h>
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
@@ -19,16 +13,12 @@
 #include <asm/atomic.h>
 #include <asm/unaligned.h>
 #include <linux/module.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
-#ifndef CONFIG_OPLUS_CHARGER_MTK6779R
-#ifndef CONFIG_OPLUS_CHARGER_MTK6765S
-#include <mt-plat/charger_type.h>
-#endif
-#endif
 #include <linux/xlog.h>
-#endif
 #include <linux/power_supply.h>
 #include <linux/gpio.h>
+#ifndef CONFIG_OPLUS_CHARGER_MTK6779R
+#include <mt-plat/charger_type.h>
+#endif
 //#include <mt-plat/battery_common.h>
 #include <soc/oplus/device_info.h>
 #include <linux/proc_fs.h>
@@ -54,7 +44,6 @@
 #include <linux/proc_fs.h>
 #include <linux/soc/qcom/smem.h>
 #endif
-#include<linux/gfp.h>
 
 #ifdef OPLUS_SHA1_HMAC
 #include <linux/random.h>
@@ -65,8 +54,8 @@
 #include "oplus_bq27541.h"
 #include "../oplus_debug_info.h"
 
-#define GAUGE_ERROR -1
-#define GAUGE_OK 0
+#define GUAGE_ERROR -1
+#define GUAGE_OK 0
 #define BATT_FULL_ERROR 2
 #define XBL_AUTH_DEBUG
 
@@ -77,8 +66,6 @@ static oplus_gauge_auth_result auth_data;
 static bool get_smem_batt_info(oplus_gauge_auth_result *auth, int kk);
 static bool init_gauge_auth(oplus_gauge_auth_result *rst, struct bq27541_authenticate_data *authenticate_data);
 static int bq27411_write_soc_smooth_parameter(struct chip_bq27541 *chip, bool is_powerup);
-static int zy0603_unseal(struct chip_bq27541 *chip, u32 key);
-static int zy0603_seal(struct chip_bq27541 *chip, u32 key);
 
 #define GAUGE_READ_ERR	0x01
 #define GAUGE_WRITE_ERR 0x02
@@ -366,606 +353,7 @@ static void bq27541_clear_gauge_i2c_err(void)
 
 	return;
 }
-/* OPLUS 2021-06-20 Add begin for zy0603 bad battery. */
-static int zy0603_start_checksum_cal(struct chip_bq27541 *chip)
-{
-	u8 update_checksum[2] = {0x05, 0x00};
-	if(NULL == chip)
-		return -1;
-	if(chip->afi_count == 0)
-		return -1;
 
-	return bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, update_checksum);
-}
-
-static int zy0603_disable_ssdf_and_pf(struct chip_bq27541 *chip)
-{
-	u8 write_protectioncfgb[5] = {0x0F, 0x41, 0x00, 0xAF, 0x05}; /*zy 20211227*/
-	u8 write_ssdftime[5] = {0x29, 0x41, 0x00, 0x95, 0x05};
-	u8 write_static_df_cheksum[6] = {0x7A, 0x42};
-	u8 pf_en_cmd[2] = {0x24, 0x00};
-	u8 mfg_status_cm[2]={0x57, 0x00};
-	u8 read_buf[4] = {0};
-	int rc = 0;
-	int retry_cnt = 0;
-
-	if(NULL == chip || (chip && chip->afi_count == 0))
-	return -1;
-
-	write_static_df_cheksum[2] = chip->static_df_checksum_3e[0];
-	write_static_df_cheksum[3] = chip->static_df_checksum_3e[1];
-	write_static_df_cheksum[4] = chip->static_df_checksum_60[0];
-	write_static_df_cheksum[5] = chip->static_df_checksum_60[1];
-	if (!zy0603_unseal(chip, 0)) {	/* ok */
-		/* disable protectioncfgb[ssdf] = 0 */
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 3, write_protectioncfgb);
-		pr_err("%s write {0x0F, 0x41, 0x00} --> 0x3e\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL2, 2, write_protectioncfgb+3);
-		pr_err("%s write {0xAF, 0x05} --> 0x60\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 3, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2]);
-		if(!((read_buf[0] == write_protectioncfgb[0]) && (read_buf[1] == write_protectioncfgb[1])
-			&& (read_buf[2] == write_protectioncfgb[2]))) {
-			rc = -1;
-			return rc;
-		}
-
-		/* disable ssdf */
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 3, write_ssdftime);
-		pr_err("%s write {0x29,0x41,0x00} --> 0x3e\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL2, 2, write_ssdftime+3);
-		pr_err("%s write {0x95,0x05} --> 0x60\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 3, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2]);
-		if (!((read_buf[0] == write_ssdftime[0]) && (read_buf[1] == write_ssdftime[1]) && (read_buf[2] == write_ssdftime[2]))) {
-			rc = -1;
-			return rc;
-		}
-		/* update StaticDFChecksum */
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 4, write_static_df_cheksum);
-		pr_err("%s write static_df_checksum_3e --> 0x3e\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL2, 2, write_static_df_cheksum+4);
-		pr_err("%s write {0x4B,0x06} --> 0x60\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 4, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x][0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
-		if(!((read_buf[0] == write_static_df_cheksum[0]) && (read_buf[1] == write_static_df_cheksum[1])
-				&& (read_buf[2] == write_static_df_cheksum[2]) && (read_buf[3] == write_static_df_cheksum[3]))) {
-			rc = -1;
-			return rc;
-		}
-		/* disable PF_EN */
-		do {
-			bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, pf_en_cmd);
-			pr_err("%s write {0x24,0x00} --> 0x3e\n", __func__);
-			usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-			bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, mfg_status_cm);
-			pr_err("%s write {0x57,0x00} --> 0x3e\n", __func__);
-
-			bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 4, read_buf);
-			pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x][0x%02x]\n", __func__,
-				read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
-			if (read_buf[2] & (0x1 << 6)) {
-				retry_cnt++;
-				pr_err("retry_dis_pfen retry_cnt[%d]\n", retry_cnt);
-			}
-		} while ((read_buf[2] & (0x1 << 6)) && retry_cnt <= 3);
-		if (retry_cnt > 3) {
-			pr_err("retry_dis_pfen failed[%d]\n", retry_cnt);
-		}
-
-		if(!((read_buf[0] == mfg_status_cm[0]) && (read_buf[1] == mfg_status_cm[1]) && ((read_buf[3]&0x40) == 0))) {
-			rc = -1;
-			pr_err("read_buf check retry_dis_pfen failed[%d]\n", retry_cnt);
-			return rc;
-		}
-	}
-
-	return rc;
-}
-
-static int zy0603_disable_ssdf_and_pf_check(struct chip_bq27541 *chip)
-{
-	u8 write_ssdftime[2] = {0x29, 0x41};
-	u8 ProtectionCfgB[3] = {0x0f, 0x41, 0x00};
-	u8 mfg_status_cm[2]={0x57, 0x00};
-	u8 read_buf[4] = {0};
-	int rc = 0;
-	int error_flag = 0;
-	int retry_cnt = 0;
-
-	/* ssdf_en check in ProtectionCfgB */
-	do {
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, ProtectionCfgB);
-		pr_err("%s write {0x29,0x41} --> 0x3e\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 3, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2]);
-		error_flag = 0;
-		if (((read_buf[0] == ProtectionCfgB[0]) && (read_buf[1] == ProtectionCfgB[1]) && (read_buf[2] == ProtectionCfgB[2]))) {
-			pr_err("%s ssdf_en in ProtectionCfgB have disabled\n", __func__);
-			rc = GAUGE_OK;
-		} else {
-			pr_err("%s ssdf_en in ProtectionCfgB recheck %d\n", __func__, retry_cnt);
-			retry_cnt++;
-			error_flag = 1;
-		}
-	} while (error_flag == 1 && retry_cnt <= 3);
-	if (error_flag == 1 && retry_cnt > 3) {
-        pr_err("%s ssdf_en in ProtectionCfgB FAILED, retried counts: %d \n", __func__, retry_cnt);
-		return GAUGE_ERROR;
-	}
-
-	/* ssdf check */
-	error_flag = 0;
-	retry_cnt = 0;
-	do {
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, write_ssdftime);
-		pr_err("%s write {0x29,0x41} --> 0x3e\n", __func__);
-		usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 3, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2]);
-		error_flag = 0;
-		if (((read_buf[0] == write_ssdftime[0]) && (read_buf[1] == write_ssdftime[1]) && (read_buf[2] == 0x00))) {
-			pr_err("ssdf time have set 0\n");
-			rc = GAUGE_OK;
-		} else {
-			pr_err("%s ssdf time recheck %d\n", __func__, retry_cnt);
-			retry_cnt++;
-			error_flag = 1;
-		}
-	} while (error_flag == 1 && retry_cnt <= 3);
-	if (error_flag == 1 && retry_cnt > 3) {
-        pr_err("%s ssdf_time checked FAILED, retried counts: %d \n", __func__, retry_cnt);
-			return GAUGE_ERROR;
-	}
-
-	/* PF_EN check */
-	error_flag = 0;
-	retry_cnt = 0;
-	do {
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, mfg_status_cm);
-		pr_err("%s write {0x57,0x00} --> 0x3e\n", __func__);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 4, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x] [0x%02x][0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
-
-		error_flag = 0;
-		if ((read_buf[0] == mfg_status_cm[0] && read_buf[1] == mfg_status_cm[1] && !(read_buf[2] & (0x1 << 6)))) {
-			pr_err("pf_en have disabled\n");
-			rc = GAUGE_OK;
-		} else {
-			pr_err("%s pf en recheck %d\n", __func__, retry_cnt);
-			retry_cnt++;
-			error_flag = 1;
-		}
-	} while (error_flag == 1 && retry_cnt <= 3);
-	if (retry_cnt > 3) {
-		pr_err("%s retry_dis_pfen failed[%d]\n", __func__, retry_cnt);
-		return GAUGE_ERROR;
-	}
-
-	return rc;
-}
-
-static int zy0603_check_ssdf_pf_checksum(struct chip_bq27541 *chip)
-{
-	u8 checksum_reg[2] = {0x7A, 0x42};
-	u8 read_buf[4] = {0};
-	int rc = 0;
-	int retry = 2;
-
-	if (!chip) {
-		return GAUGE_ERROR;
-	}
-	do {
-		bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, checksum_reg);
-		pr_err("%s write {0x7A, 0x42} --> 0x3E\n", __func__);
-		usleep_range(5000, 5000);
-
-		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 4, read_buf);
-		pr_err("%s 0x3E -->read [0x%02x][0x%02x][0x%02x][0x%02x]\n", __func__,
-			read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
-		if ((read_buf[2] == chip->static_df_checksum_3e[0]) &&
-				(read_buf[3] == chip->static_df_checksum_3e[1])) {
-			retry = 0;
-			rc = GAUGE_OK;
-		} else {
-			retry--;
-			rc = GAUGE_ERROR;
-		}
-	} while (retry > 0);
-
-	return rc;
-}
-
-
-static int zy0603_static_checksum_check(struct chip_bq27541 *chip)
-{
-	int rc = 0;
-	u8 update_checksum[2] = {0x05, 0x00};
-	u8 read_buf[4] = {0};
-
-	/* w */
-	bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, update_checksum);
-
-	/* r */
-	bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 4, read_buf);
-
-	/* check */
-	if (read_buf[3] & (1 << 7)) {
-		rc = 1;	/* exception */
-		pr_err("%s checksum exception [0x%x] [0x%x] [0x%x] [0x%x]\n",
-				__func__, read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
-	} else {
-		rc = 0;	/* normal */
-	}
-
-	return rc;
-}
-
-static int zy0603_QmaxFgStatus_check(struct chip_bq27541 *chip)
-{
-	int rc = 0;
-	u8 QmaxFGstatus[2] = {0x75, 0x00};
-	u8 read_buf[7] = {0};
-	int qmax_cell1, qmax_cell2, fg_status;
-
-	/* w */
-	bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 2, QmaxFGstatus);
-
-	/* r */
-	bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 7, read_buf);
-
-	/* check */
-	fg_status = read_buf[6];
-	qmax_cell1 = (read_buf[3] << 8) | read_buf[2];
-	qmax_cell2 = (read_buf[5] << 8) | read_buf[4];
-	if (!(qmax_cell1 >= chip->zy_dts_qmax_min && qmax_cell1 <= chip->zy_dts_qmax_max) ||
-		!(qmax_cell2 >= chip->zy_dts_qmax_min && qmax_cell2 <= chip->zy_dts_qmax_max)	||
-		!(fg_status == 0x33)) {
-		rc = 1;	/* exception */
-		pr_err("Qmax or fg_status exception\n");
-		pr_err("%s [0x%0x] [0x%0x] [0x%0x] [0x%0x] [0x%0x] [0x%0x] [0x%0x]\n",
-				__func__, read_buf[0], read_buf[1], read_buf[2],
-				read_buf[3], read_buf[4], read_buf[5], read_buf[6]);
-	} else {
-		rc = 0;	/* normal */
-	}
-
-	return rc;
-}
-
-static int zy0603_update_afi_buf(struct chip_bq27541 *chip, u16 base_addr, u16 len, const u8 *afi_buf1, char *msg)
-{
-	u8 checksum = 0xFF;
-	u8 len1 = len / 16;
-	u8 len2 = len % 16;
-	int i = 0;
-	int j = 0;
-	int k = 0;
-	int retry = 0;
-	int error_flag = 0;
-
-	u8 write_buf[16 + 4] = {0};
-	u8 read_buf[16 + 4] = {0};
-	u16 addr;
-
-	printk("update %s ...\n", msg);
-	for (i=0; i < len1; i++) {
-		checksum = 0xFF;
-		addr = base_addr + i*16;
-		write_buf[0] = (u8)addr;
-		checksum -= write_buf[0];
-		write_buf[1] = (u8)(addr>>8);
-		checksum -= write_buf[1];
-		for (j=0; j < 16; j++) {
-			write_buf[2+j] = afi_buf1[j+i*16];	/* 0x4000 + 30 = 0x401E */
-			checksum -= write_buf[2+j];
-		}
-		write_buf[18] = checksum;
-		write_buf[19] = 16+4;								/* total len */
-
-		retry = 0;
-		do {
-			bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, 18, write_buf);	/* addr + valid data */
-			usleep_range(U_DELAY_1_MS, U_DELAY_1_MS);
-			bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL2, 2, write_buf+18); /* checksum + self (18 + 19) */
-			usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-			bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, 18, read_buf); 	/* addr + valid data */
-			for (k=0; k < 18; k++) {
-				error_flag = 0;
-				if(write_buf[k] != read_buf[k]) {
-					pr_err("%s 1 w r[%d][%d] = 0x%0x 0x%0x", msg, i, k, write_buf[k], read_buf[k]);	/* expect 0x78 */
-					error_flag = 1;
-					retry++;
-					pr_err("%s 1 error retry[%d]\n", msg, retry);
-					break;
-				}
-			}
-		} while (error_flag == 1 && retry < 5);
-		pr_err("\n");
-	}
-
-	if (len2 > 0) {											/* tail: len2 < 16 */
-		checksum = 0xFF;
-		addr = base_addr + len1*16;
-		write_buf[0] = (u8)addr;
-		checksum -= write_buf[0];
-		write_buf[1] = (u8)(addr>>8);
-		checksum -= write_buf[1];
-		for (j=0; j < len2; j++) {
-			write_buf[2+j] = afi_buf1[j+len1*16];
-			checksum -= write_buf[2+j];
-		}
-		write_buf[len2 + 2] = checksum;
-		write_buf[len2 + 3] = len2 + 4;
-
-		retry = 0;
-		do {
-			bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, len2 + 2, write_buf);
-			usleep_range(U_DELAY_1_MS, U_DELAY_1_MS);
-			bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL2, 2, write_buf+len2+2);
-			usleep_range(U_DELAY_5_MS, U_DELAY_5_MS);
-			bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, len2 + 2, read_buf);
-			for (k=0; k < len2 + 2; k++) {
-				error_flag = 0;
-				if(write_buf[k] != read_buf[k]) {
-					pr_err("%s 2 [%d] = 0x%0x 0x%0x", msg, k, write_buf[k], read_buf[k]);
-					error_flag = 1;
-					retry++;
-					pr_err("%s 2 error retry[%d]\n", msg, retry);
-					break;
-				}
-			}
-		} while (error_flag == 1 && retry < 5);
-	}
-	pr_err("%s update done\n", msg);
-
-	return 0;
-}
-
-static int zy0603_afi_param_update(struct chip_bq27541 *chip)
-{
-	u16 base_addr;
-
-	/* write afi_buf1 */
-	base_addr = 0x4000;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[0], chip->afi_buf[0], "afi_buf1");
-
-	/* write afi_buf2 */
-	base_addr = 0x40FF;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[1], chip->afi_buf[1], "afi_buf2");
-
-	/* write afi_buf3 */
-	base_addr = 0x4200;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[2], chip->afi_buf[2], "afi_buf3");
-
-	/* write afi_buf4 */
-	base_addr = 0x4245;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[3], chip->afi_buf[3], "afi_buf4");
-
-	/* write afi_buf5 */
-	base_addr = 0x427A;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[4], chip->afi_buf[4], "afi_buf5");
-
-	/* write afi_buf6 */
-	base_addr = 0x4400;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[5], chip->afi_buf[5], "afi_buf6");
-
-	/* write afi_buf7 */
-	base_addr = 0x4600;
-	zy0603_update_afi_buf(chip, base_addr, chip->afi_buf_len[6], chip->afi_buf[6], "afi_buf7");
-	return 0;
-}
-
-#define OPLUS_AFI_UPDATE_INTERVAL_SEC 		5
-#define OPLUS_AFI_UPDATE_INTERVAL	round_jiffies_relative(msecs_to_jiffies(OPLUS_AFI_UPDATE_INTERVAL_SEC*1000))
-extern bool oplus_check_afi_update_condition(void);
-static void zy0603_afi_update_work(struct work_struct *work)
-{
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct chip_bq27541 *chip = container_of(dwork, struct chip_bq27541, afi_update);
-	int ret = 0;
-	int error_flag = 0;
-
-	chip->need_check = false;
-	if (chip->error_occured) {
-		goto error_occured;
-	}
-error_occured:
-	msleep(M_DELAY_10_S);
-	if (oplus_check_afi_update_condition()) {
-		printk(KERN_ERR "[%s] zy0603_afi_param_update [%d, %d]\n", __func__, oplus_vooc_get_fastchg_started(), oplus_vooc_get_allow_reading());
-		if (oplus_vooc_get_allow_reading()) {
-			if (!zy0603_unseal(chip, 0)) {
-				chip->afi_update_done = false;
-				ret = zy0603_afi_param_update(chip);
-				if (ret < 0) {
-					printk(KERN_ERR "[%s] zy0603_afi_param_update fail\n", __func__);
-				}
-
-				do {
-					error_flag = 0;
-					if (!zy0603_seal(chip, 0)) {
-						chip->afi_update_done = true;
-						chip->error_occured = true;
-						printk(KERN_ERR "[%s] zy0603_seal ok\n", __func__);
-					} else {
-						error_flag = 1;
-					}
-				} while (error_flag);
-			}
-			printk(KERN_ERR "[%s] zy0603_afi_param_update done\n", __func__);
-		}
-	}
-	chip->need_check = true;
-/*	if (chip->error_occured) {
-		schedule_delayed_work(&gauge_ic->afi_update, 0);
-		printk(KERN_ERR "[%s] error_occured retrigger afi update\n", __func__);
-	}
-*/
-}
-
-static bool zy0603_afi_update_done(void)
-{
-	if (!gauge_ic) {
-		return false;
-	}
-
-	if (gauge_ic->batt_zy0603 && gauge_ic->afi_count > 0 && !gauge_ic->afi_update_done) {
-		printk(KERN_ERR "[%s] return for afi_update_done not finished\n");
-		return false;
-	} else {
-		return true;
-	}
-}
-
-#define CHECKSUM_ERROR_CNT	3
-static int zy0603_protect_check(void)
-{
-	static int checksum_error = 0;
-	static int qmax_fgstatus_error = 0;
-	/* static bool error_occured = false; */
-	int checksum_error_flag = 0, qmaxfg_error_flag = 0;
-
-	/*printk(KERN_ERR "[%s] v12 unseal start\n", __func__);*/
-	if (!gauge_ic || (gauge_ic && !gauge_ic->batt_zy0603) || (gauge_ic && gauge_ic->afi_count == 0)) {
-		/*printk(KERN_ERR "[%s] return for %s\n", __func__, !gauge_ic ? "guage is null" : "is not zy0603 gauge");*/
-		return -1;
-	}
-
-	/*printk(KERN_ERR "[%s] ssdf and pf disable = %d\n", __func__, gauge_ic->disabled);*/
-	/* if (oplus_vooc_get_allow_reading() && gauge_ic->disabled !error_occured) { */
-	if (oplus_vooc_get_allow_reading() && gauge_ic->disabled && gauge_ic->need_check) {
-		if (zy0603_static_checksum_check(gauge_ic)) {
-			checksum_error_flag = 1;
-			checksum_error++;
-			printk(KERN_ERR "[%s] staticchecksum_error = %d\n", __func__, checksum_error);
-			if (CHECKSUM_ERROR_CNT <= checksum_error) {
-				checksum_error = 0;
-				if (gauge_ic && gauge_ic->afi_update_done) {
-					schedule_delayed_work(&gauge_ic->afi_update, 0);
-				}
-			}
-		} else {
-			checksum_error_flag = 0;
-			checksum_error = 0;
-		}
-		if (zy0603_QmaxFgStatus_check(gauge_ic)) {
-			qmaxfg_error_flag = 1;
-			qmax_fgstatus_error++;
-
-			printk(KERN_ERR "[%s] qmax_fgstatus_error = %d\n", __func__, qmax_fgstatus_error);
-			if (CHECKSUM_ERROR_CNT <= qmax_fgstatus_error) {
-				qmax_fgstatus_error = 0;
-				if (gauge_ic && gauge_ic->afi_update_done) {
-					schedule_delayed_work(&gauge_ic->afi_update, 0);
-				}
-			}
-		} else {
-			qmaxfg_error_flag = 0;
-			qmax_fgstatus_error = 0;
-		}
-		/* error_occured = true; */
-	}
-	/*printk(KERN_ERR "[%s] checksum_error[%d %d] qmaxfg_error[%d, %d]\n",
-		__func__, checksum_error_flag, checksum_error, qmaxfg_error_flag, qmax_fgstatus_error);*/
-
-	return 0;
-}
-
-static int zy0603_parse_afi_buf(struct chip_bq27541 *chip) {
-	struct device_node *node = chip->dev->of_node;
-	struct device_node *afi_data_node = NULL;
-	int rc = 0;
-	const u8 *data;
-	char dt_name[30];
-	const char *battery_name;
-	unsigned int len = 0;
-	int i = 0;
-
-	chip->afi_count = 0;
-	afi_data_node = of_find_node_by_name(node, "zy,afi_data");
-	if (afi_data_node == NULL) {
-		dev_err(chip->dev, "%s, zy,afi_data failed\n", __func__);
-		return -ENOMEM;
-	}
-	rc = of_property_read_string(afi_data_node, "battery,name", &battery_name);
-	if (rc) {
-		dev_err(chip->dev, "%s, battery-name failed\n", __func__);
-		return -ENOMEM;
-	}
-	dev_err(chip->dev, "%s, battery-name = %s\n", __func__, battery_name);
-	rc = of_property_read_u32(afi_data_node, "qmax_min", &chip->zy_dts_qmax_min);
-	if (rc) {
-		dev_err(chip->dev, "%s, qmax_min failed\n", __func__);
-		return -ENOMEM;
-	}
-	dev_err(chip->dev, "%s, qmax_min = %d\n", __func__, chip->zy_dts_qmax_min);
-	rc = of_property_read_u32(afi_data_node, "qmax_max", &chip->zy_dts_qmax_max);
-	if (rc) {
-		dev_err(chip->dev, "%s, qmax_max failed\n", __func__);
-		return -ENOMEM;
-	}
-	dev_err(chip->dev, "%s, qmax_max = %d\n", __func__, chip->zy_dts_qmax_max);
-	data = of_get_property(afi_data_node, "static_df_checksum_3e", &len);
-	if (!data || len != 2) {
-		dev_err(chip->dev, "%s, parse static_df_checksum_3e  failed\n", __func__);
-		return -ENOMEM;
-	}
-	chip->static_df_checksum_3e = data;
-	dev_err(chip->dev, "%s, static_df_checksum_3e = [%x,%x]\n", __func__, chip->static_df_checksum_3e[0], chip->static_df_checksum_3e[1]);
-	data = of_get_property(afi_data_node, "static_df_checksum_60", &len);
-	if (!data || len != 2) {
-		dev_err(chip->dev, "%s, parse static_df_checksum_60  failed\n", __func__);
-		return -ENOMEM;
-	}
-	chip->static_df_checksum_60 = data;
-	dev_err(chip->dev, "%s, static_df_checksum_60 = [%x,%x]\n", __func__, chip->static_df_checksum_60[0], chip->static_df_checksum_60[1]);
-	rc = of_property_read_u32(afi_data_node, "afi_buf_num", &chip->afi_count);
-	if (rc || chip->afi_count == 0) {
-		chip->afi_count = 0;
-		return -ENOMEM;
-	}
-	dev_err(chip->dev, "zy0603_parse_afi_buf afi_count %d\n", chip->afi_count);
-	chip->afi_buf = devm_kzalloc(&chip->client->dev, chip->afi_count * sizeof(u8 *), GFP_KERNEL);
-	chip->afi_buf_len = devm_kzalloc(&chip->client->dev, chip->afi_count * sizeof(unsigned int), GFP_KERNEL);
-	for (i = 0; i < chip->afi_count; i++) {
-		sprintf(dt_name, "afi_buf_%d", i);
-		dev_err(chip->dev, "zy0603_parse_afi_buf chwit dt_name= %s\n", dt_name);
-		data = of_get_property(afi_data_node, dt_name, &len);
-		if (!data) {
-			dev_err(chip->dev, "%s, parse afi_buf %s failed\n", __func__, dt_name);
-			chip->afi_count = 0;
-			return -ENOMEM;
-		}
-		chip->afi_buf[i] = data;
-		chip->afi_buf_len[i] = len;
-		dev_err(chip->dev, "zy0603_parse_afi_buf chwit i = %d, len= %d  end [%x]\n", i, len, chip->afi_buf[i][chip->afi_buf_len[i] - 1]);
-	}
-	return rc;
-}
 /* OPLUS 2013-08-24 wangjc Add begin for add adc interface. */
 static int bq27541_get_battery_cc(void)    /*  sjc20150105  */
 {
@@ -2005,102 +1393,6 @@ static int bq27541_get_sub_gauge_batt_remaining_capacity(void)
 	}
 }
 
-static int bq28z610_get_dod0_parameters(
-	int *batt_dod0_1, int *batt_dod0_2, int *batt_dod0_passed_q)
-{
-	unsigned char dod0_buffer[BQ28Z610_MAC_CELL_DOD0_SIZE] = {0, 0, 0, 0, 0, 0};
-	short dod0_passed_q_temp;
-
-	if (!gauge_ic || !gauge_ic->batt_bq28z610 || !oplus_vooc_get_allow_reading()) {
-		dev_err(gauge_ic->dev, "gauge ic is NULL or is not 28z610 or not allow_reading!\n");
-		return -1;
-	}
-
-	mutex_lock(&bq28z610_alt_manufacturer_access);
-	bq27541_i2c_txsubcmd(gauge_ic, BQ28Z610_MAC_CELL_DOD0_EN_ADDR,
-		BQ28Z610_MAC_CELL_DOD0_CMD);
-	usleep_range(1000, 1000);
-	if (gauge_ic->batt_zy0603) {
-		bq27541_read_i2c_block(gauge_ic, ZY0603_MAC_CELL_SOCCAL0,
-			BQ28Z610_MAC_CELL_DOD0_SIZE, dod0_buffer);
-	} else {
-		bq27541_read_i2c_block(gauge_ic, BQ28Z610_MAC_CELL_DOD0_ADDR,
-			BQ28Z610_MAC_CELL_DOD0_SIZE, dod0_buffer);
-	}
-	mutex_unlock(&bq28z610_alt_manufacturer_access);
-	dod0_passed_q_temp = (dod0_buffer[5] << 8) | dod0_buffer[4];
-	*batt_dod0_1 = (dod0_buffer[1] << 8) | dod0_buffer[0];
-	*batt_dod0_2 = (dod0_buffer[3] << 8) | dod0_buffer[2];
-	if (dod0_passed_q_temp & 0x8000) {
-		dod0_passed_q_temp = -((~(dod0_passed_q_temp-1)) & 0xFFFF);
-	}
-	*batt_dod0_passed_q = dod0_passed_q_temp;
-	dev_err(gauge_ic->dev, "!!![bq28z610_get_dod0_parameters]dod0 passed q: %d, dod0 1: %d, dod0 2: %d",
-				*batt_dod0_passed_q, *batt_dod0_1, *batt_dod0_2);
-
-	return 0;
-}
-
-static int bq28z610_get_qmax_parameters(
-	int *batt_qmax_1, int *batt_qmax_2, int *batt_qmax_passed_q)
-{
-	unsigned char qmax_buffer_1[BQ28Z610_MAC_CELL_QMAX_SIZE_A] = {0, 0, 0, 0};
-	unsigned char qmax_buffer_2[BQ28Z610_MAC_CELL_QMAX_SIZE_B] = {0, 0};
-	short qmax_passed_q_temp;
-
-	if (!gauge_ic || !gauge_ic->batt_bq28z610 || !oplus_vooc_get_allow_reading()) {
-		dev_err(gauge_ic->dev, "gauge ic is NULL or is not 28z610 or not allow_reading!\n");
-		return -1;
-	}
-
-	mutex_lock(&bq28z610_alt_manufacturer_access);
-	bq27541_i2c_txsubcmd(gauge_ic, BQ28Z610_MAC_CELL_QMAX_EN_ADDR,
-		BQ28Z610_MAC_CELL_QMAX_CMD);
-	usleep_range(1000, 1000);
-	bq27541_read_i2c_block(gauge_ic, BQ28Z610_MAC_CELL_QMAX_ADDR_A,
-		BQ28Z610_MAC_CELL_QMAX_SIZE_A, qmax_buffer_1);
-
-	bq27541_i2c_txsubcmd(gauge_ic, BQ28Z610_MAC_CELL_QMAX_EN_ADDR,
-		BQ28Z610_MAC_CELL_QMAX_CMD);
-	usleep_range(1000, 1000);
-	bq27541_read_i2c_block(gauge_ic, BQ28Z610_MAC_CELL_QMAX_ADDR_B,
-		BQ28Z610_MAC_CELL_QMAX_SIZE_B, qmax_buffer_2);
-	mutex_unlock(&bq28z610_alt_manufacturer_access);
-	*batt_qmax_1 = (qmax_buffer_1[1] << 8) | qmax_buffer_1[0];
-	*batt_qmax_2 = (qmax_buffer_1[3] << 8) | qmax_buffer_1[2];
-	qmax_passed_q_temp = (qmax_buffer_2[1] << 8) | qmax_buffer_2[0];
-	if (qmax_passed_q_temp & 0x8000) {
-		qmax_passed_q_temp = -((~(qmax_passed_q_temp-1)) & 0xFFFF);
-	}
-	*batt_qmax_passed_q = qmax_passed_q_temp;
-	dev_err(gauge_ic->dev, "!!![bq28z610_get_qmax_parameters]qmax passed q: %d, qmax 1: %d, qmax 2: %d",
-				*batt_qmax_passed_q, *batt_qmax_1, *batt_qmax_2);
-
-	return 0;
-}
-
-static int bq28z610_get_firstcell_voltage(void)
-{
-	if (!gauge_ic || !gauge_ic->batt_bq28z610 || !oplus_vooc_get_allow_reading()) {
-		dev_err(gauge_ic->dev, "gauge ic is NULL or is not 28z610 or not allow_reading!\n");
-		return 0;
-	}
-
-	bq28z610_get_2cell_voltage();
-	return gauge_ic->batt_cell_1_vol;
-}
-
-static int bq28z610_get_secondcell_voltage(void)
-{
-	if (!gauge_ic || !gauge_ic->batt_bq28z610 || !oplus_vooc_get_allow_reading()) {
-		dev_err(gauge_ic->dev, "gauge ic is NULL or is not 28z610 or not allow_reading!\n");
-		return 0;
-	}
-
-	bq28z610_get_2cell_voltage();
-	return gauge_ic->batt_cell_2_vol;
-}
-
 static int bq27541_get_prev_batt_remaining_capacity(void)
 {
 	if (!gauge_ic) {
@@ -2401,7 +1693,7 @@ static int  bq28z610_update_soc_smooth_parameter(void)
 	if(gauge_ic->batt_zy0603) {
 		pr_err("%s batt_zy0603 begin\n", __func__);
 		zy0603_write_data_cmd(gauge_ic, true);
-		return GAUGE_OK;
+		return GUAGE_OK;
 	}
 
 	if(gauge_ic->device_type == DEVICE_ZY0602) {
@@ -2422,7 +1714,7 @@ static int  bq28z610_update_sub_soc_smooth_parameter(void)
 	if(sub_gauge_ic->batt_zy0603) {
 		pr_err("%s batt_zy0603 begin\n", __func__);
 		zy0603_write_data_cmd(sub_gauge_ic, true);
-		return GAUGE_OK;
+		return GUAGE_OK;
 	}
 
 	if(sub_gauge_ic->device_type == DEVICE_ZY0602) {
@@ -2570,255 +1862,6 @@ static int bq28z610_set_sleep_mode(struct chip_bq27541 *chip, bool val)
 	return rc;
 }
 
-#define BCC_SET_DEBUG_PARMS 1
-#define BCC_PAGE_SIZE 256
-#define BCC_N_DEBUG 0
-#define BCC_Y_DEBUG 1
-static int bcc_debug_mode  = BCC_N_DEBUG;
-static char bcc_debug_buf[BCC_PAGE_SIZE] = {0};
-
-static void bq28z610_bcc_set_buffer(int *buffer)
-{
-	int batt_qmax_1 = 0;
-	int batt_qmax_2 = 0;
-	int batt_qmax_passed_q = 0;
-	int batt_dod0_1 = 0;
-	int batt_dod0_2 = 0;
-	int batt_dod0_passed_q = 0;
-	int btemp = 0;
-	int batt_current = 0;
-	int voltage_cell1 = 0, voltage_cell2 = 0;
-	int soc_ext_1 = 0, soc_ext_2 = 0;
-	int bcc_current_max = 0, bcc_current_min = 0;
-	int atl_last_gear_current = 0;
-
-	bcc_current_max = oplus_vooc_check_bcc_max_curr();
-	bcc_current_min = oplus_vooc_check_bcc_min_curr();
-	bq28z610_get_qmax_parameters(&batt_qmax_1, &batt_qmax_2, &batt_qmax_passed_q);
-	bq28z610_get_dod0_parameters(&batt_dod0_1, &batt_dod0_2, &batt_dod0_passed_q);
-	voltage_cell1 = bq28z610_get_firstcell_voltage();
-	voltage_cell2 = bq28z610_get_secondcell_voltage();
-	batt_current = bq27541_get_average_current();
-	btemp = oplus_chg_match_temp_for_chging();
-	atl_last_gear_current = oplus_vooc_get_bcc_exit_curr();
-	/*soc_ext_1 = (1 - (double)batt_dod0_passed_q / (double)batt_qmax_1 - (double)batt_dod0_1 / 16384) * 1000000;
-	soc_ext_2 = (1 - (double)batt_dod0_passed_q / (double)batt_qmax_2 - (double)batt_dod0_2 / 16384) * 1000000;*/
-
-	if (gauge_ic->batt_zy0603) {
-		batt_dod0_passed_q = 0;
-		buffer[17] = 1;
-	}
-	buffer[0] = batt_dod0_1;
-	buffer[1] = batt_dod0_2;
-	buffer[2] = batt_dod0_passed_q;
-	buffer[3] = batt_qmax_1;
-	buffer[4] = batt_qmax_2;
-	buffer[5] = batt_qmax_passed_q;
-	buffer[6] = voltage_cell1;
-	buffer[7] = btemp;
-	buffer[8] = batt_current;
-	buffer[9] = bcc_current_max;
-	buffer[10] = bcc_current_min;
-	buffer[11] = voltage_cell2;
-	buffer[12] = soc_ext_1;
-	buffer[13] = soc_ext_2;
-	buffer[14] = atl_last_gear_current;
-}
-
-static void bq28z610_bcc_pre_calibration(int *buffer)
-{
-	if (!gauge_ic) {
-		return;
-	}
-
-	memcpy(gauge_ic->bcc_buf, buffer, BCC_PARMS_COUNT_LEN);
-}
-
-static int bq28z610_get_battery_bcc_parameters(char *buf)
-{
-	unsigned char *tmpbuf;
-	unsigned int buffer[BCC_PARMS_COUNT] = {0};
-	int len = 0;
-	int i = 0;
-	int idx = 0;
-
-	tmpbuf = (unsigned char *)get_zeroed_page(GFP_KERNEL);
-
-	bq28z610_bcc_set_buffer(buffer);
-
-	if (oplus_vooc_get_fastchg_ing() &&
-	    oplus_vooc_get_fast_chg_type() != CHARGER_SUBTYPE_FASTCHG_VOOC &&
-	    !oplus_vooc_get_fastchg_dummy_started()) {
-		buffer[15] = 1;
-	} else {
-		buffer[15] = 0;
-	}
-
-	if (buffer[9] == 0) {
-		buffer[15] = 0;
-	}
-
-	buffer[16] = oplus_chg_get_bcc_curr_done_status();
-
-	if (oplus_vooc_bcc_get_temp_range() == false) {
-		buffer[9] = 0;
-		buffer[10] = 0;
-		buffer[14] = 0;
-		buffer[15] = 0;
-	}
-
-	printk(KERN_ERR "%s : ----dod0_1[%d], dod0_2[%d], dod0_passed_q[%d], qmax_1[%d], qmax_2[%d], qmax_passed_q[%d] \
-		voltage_cell1[%d], temperature[%d], batt_current[%d], max_current[%d], min_current[%d], voltage_cell2[%d], \
-		soc_ext_1[%d], soc_ext_2[%d], atl_last_geat_current[%d], charging_flag[%d], bcc_curr_done[%d], is_zy0603[%d]", __func__,
-		buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7],
-		buffer[8], buffer[9], buffer[10], buffer[11], buffer[12], buffer[13], buffer[14], buffer[15], buffer[16], buffer[17]);
-
-	for (i = 0; i < BCC_PARMS_COUNT - 1; i++) {
-		len = snprintf(tmpbuf, BCC_PAGE_SIZE - idx,
-						"%d,", buffer[i]);
-		memcpy(&buf[idx], tmpbuf, len);
-		idx += len;
-	}
-	len = snprintf(tmpbuf, BCC_PAGE_SIZE - idx,
-				"%d", buffer[i]);
-	memcpy(&buf[idx], tmpbuf, len);
-
-	free_page((unsigned long)tmpbuf);
-
-#ifdef BCC_SET_DEBUG_PARMS
-	if (bcc_debug_mode & BCC_Y_DEBUG) {
-		memcpy(&buf[0], bcc_debug_buf, BCC_PAGE_SIZE);
-		printk(KERN_ERR "%s bcc_debug_buf:%s\n", __func__, bcc_debug_buf);
-		return 0;
-	}
-#endif
-
-	printk(KERN_ERR "%s buf:%s\n", __func__, buf);
-
-	return 0;
-}
-
-static int bq28z610_get_fastchg_battery_bcc_parameters(char *buf)
-{
-	unsigned int buffer[BCC_PARMS_COUNT] = {0};
-
-	bq28z610_bcc_set_buffer(buffer);
-
-	if (oplus_vooc_get_fastchg_ing() &&
-	    oplus_vooc_get_fast_chg_type() != CHARGER_SUBTYPE_FASTCHG_VOOC &&
-	    !oplus_vooc_get_fastchg_dummy_started()) {
-		buffer[15] = 1;
-	} else {
-		buffer[15] = 0;
-	}
-
-	if (buffer[9] == 0) {
-		buffer[15] = 0;
-	}
-
-	buffer[16] = oplus_chg_get_bcc_curr_done_status();
-
-	printk(KERN_ERR "%s : ----dod0_1[%d], dod0_2[%d], dod0_passed_q[%d], qmax_1[%d], qmax_2[%d], qmax_passed_q[%d] \
-		voltage_cell1[%d], temperature[%d], batt_current[%d], max_current[%d], min_current[%d], voltage_cell2[%d], \
-		soc_ext_1[%d], soc_ext_2[%d], atl_last_geat_current[%d], charging_flag[%d], bcc_curr_done[%d], is_zy0603[%d]", __func__,
-		buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7],
-		buffer[8], buffer[9], buffer[10], buffer[11], buffer[12], buffer[13], buffer[14], buffer[15], buffer[16], buffer[17]);
-
-	bq28z610_bcc_pre_calibration(buffer);
-
-	printk(KERN_ERR "%s buf:%s\n", __func__, buf);
-
-	return 0;
-}
-
-static int bq28z610_get_prev_battery_bcc_parameters(char *buf)
-{
-	int i = 0;
-	int idx = 0;
-	unsigned char *tmpbuf;
-	int len = 0;
-
-	tmpbuf = (unsigned char *)get_zeroed_page(GFP_KERNEL);
-
-/*modify for update in real time*/
-	gauge_ic->bcc_buf[9] = oplus_vooc_check_bcc_max_curr();
-	gauge_ic->bcc_buf[10] = oplus_vooc_check_bcc_min_curr();
-
-	if (oplus_vooc_get_fastchg_ing() && oplus_vooc_get_fast_chg_type() != CHARGER_SUBTYPE_FASTCHG_VOOC) {
-		gauge_ic->bcc_buf[15] = 1;
-	} else {
-		gauge_ic->bcc_buf[15] = 0;
-	}
-
-	if (gauge_ic->bcc_buf[9] == 0) {
-		gauge_ic->bcc_buf[15] = 0;
-	}
-
-	gauge_ic->bcc_buf[16] = oplus_chg_get_bcc_curr_done_status();
-
-	if (oplus_vooc_bcc_get_temp_range() == false) {
-		gauge_ic->bcc_buf[9] = 0;
-		gauge_ic->bcc_buf[10] = 0;
-		gauge_ic->bcc_buf[14] = 0;
-		gauge_ic->bcc_buf[15] = 0;
-	}
-
-	for (i = 0; i < BCC_PARMS_COUNT - 1; i++) {
-		len = snprintf(tmpbuf, BCC_PAGE_SIZE - idx,
-					"%d,", gauge_ic->bcc_buf[i]);
-		memcpy(&buf[idx], tmpbuf, len);
-		idx += len;
-	}
-	len = snprintf(tmpbuf, BCC_PAGE_SIZE - idx,
-					"%d", gauge_ic->bcc_buf[i]);
-	memcpy(&buf[idx], tmpbuf, len);
-
-	free_page((unsigned long)tmpbuf);
-
-#ifdef BCC_SET_DEBUG_PARMS
-	if (bcc_debug_mode & BCC_Y_DEBUG) {
-		memcpy(&buf[0], bcc_debug_buf, BCC_PAGE_SIZE);
-		printk(KERN_ERR "%s bcc_debug_buf:%s\n", __func__, bcc_debug_buf);
-		return 0;
-	}
-#endif
-
-	printk(KERN_ERR "%s bcc_buf:%s\n", __func__, buf);
-
-	return 0;
-}
-
-static int bq28z610_set_bcc_debug_parameters(const char *buf)
-{
-	int ret = 0;
-#ifdef BCC_SET_DEBUG_PARMS
-	char temp_buf[10] = {0};
-#endif
-
-#ifdef BCC_SET_DEBUG_PARMS
-	if (strlen(buf) <= BCC_PAGE_SIZE) {
-		if (strncpy(temp_buf, buf, 7)) {
-			printk(KERN_ERR "%s temp_buf:%s\n", __func__, temp_buf);
-		}
-		if (!strncmp(temp_buf, "Y_DEBUG", 7)) {
-			bcc_debug_mode = BCC_Y_DEBUG;
-			printk(KERN_ERR "%s BCC_Y_DEBUG:%d\n",
-				__func__, bcc_debug_mode);
-		} else {
-			bcc_debug_mode = BCC_N_DEBUG;
-			printk(KERN_ERR "%s BCC_N_DEBUG:%d\n",
-				__func__, bcc_debug_mode);
-		}
-		strncpy(bcc_debug_buf, buf + 8, strlen(buf) - 8);
-		printk(KERN_ERR "%s bcc_debug_buf:%s, temp_buf\n",
-			__func__, bcc_debug_buf, temp_buf);
-		return ret;
-	}
-#endif
-
-	printk(KERN_ERR "%s buf:%s\n", __func__, buf);
-	return ret;
-}
 
 static int gauge_reg_dump(void);
 static int bq27541_set_allow_reading(int enable)
@@ -2882,14 +1925,8 @@ static struct oplus_gauge_operations bq27541_gauge_ops = {
 	.clear_gauge_i2c_err = bq27541_clear_gauge_i2c_err,
 	.get_passdchg = bq27541_get_passedchg,
 	.dump_register = gauge_reg_dump,
-	.protect_check = zy0603_protect_check,
-	.afi_update_done = zy0603_afi_update_done,
 	.set_allow_reading   = bq27541_set_allow_reading,
 	.wlchg_started_status = bq27541_set_wlchg_started_status,
-	.get_bcc_parameters = bq28z610_get_battery_bcc_parameters,
-	.get_update_bcc_parameters = bq28z610_get_fastchg_battery_bcc_parameters,
-	.set_bcc_parameters = bq28z610_set_bcc_debug_parameters,
-	.get_prev_bcc_parameters = bq28z610_get_prev_battery_bcc_parameters,
 };
 
 static struct oplus_gauge_operations bq27541_sub_gauge_ops = {
@@ -3308,18 +2345,11 @@ static int zy0603_seal(struct chip_bq27541 *chip, u32 key)
 {
 	u8 seal_cmd[2] = {0x30, 0x00};
 	u8 seal_op_st[2] = {0x54, 0x00};
-	u8 seal_cmd2[2] = {0x45, 0x00};
 	u8 read_buf[6] = {0};
 	int retry = 2;
 	int rc = 0;
 
-	if (!chip)
-		return -1;
-
 	do {
-		bq27541_write_i2c_block(chip, 0x00, 2, seal_cmd2);
-		pr_err("%s write {0x45,0x00} --> 0x00\n", __func__);
-		usleep_range(100000, 100000);
 		bq27541_write_i2c_block(chip, 0x00, 2, seal_cmd);
 		pr_err("%s write {0x30,0x00} --> 0x00\n", __func__);
 		usleep_range(5000, 5000);
@@ -3356,9 +2386,6 @@ static int zy0603_unseal(struct chip_bq27541 *chip, u32 key)
 	u8 read_buf[6] = {0};
 	int retry = 2;
 	int rc = 0;
-
-	if (!chip)
-		return -1;
 
 	do {
 		bq27541_write_i2c_block(chip, 0x00, 2, seal_cmd_1);
@@ -3480,8 +2507,6 @@ static int zy0603_battery_sleep_enable_cmd(struct chip_bq27541 *chip)
 static int zy0603_write_data_cmd(struct chip_bq27541 *chip, bool enable)
 {
 	int rc = 0;
-	int retry_cnt = 0;
-	int error_flag = 0;
 
 	rc = zy0603_unseal(chip, 0);
 	if(rc == 0) {
@@ -3493,30 +2518,7 @@ static int zy0603_write_data_cmd(struct chip_bq27541 *chip, bool enable)
 		} else {
 			zy0603_battery_sleep_enable_cmd(chip);
 		}
-
-		if ((chip->batt_zy0603) && (chip->afi_count > 0)) {
-			do {
-				error_flag = 0;
-				if (GAUGE_OK != zy0603_disable_ssdf_and_pf_check(chip) ||
-					GAUGE_OK != zy0603_check_ssdf_pf_checksum(chip)) {
-						retry_cnt++;
-						error_flag = 1;
-						zy0603_disable_ssdf_and_pf(chip);
-				}
-			} while (retry_cnt < 5 && error_flag == 1);
-			if (gauge_ic && retry_cnt < 5) {
-				gauge_ic->disabled = true;
-				pr_err("%s v12 zy0603_disable_ssdf_and_pf_check ok\n", __func__);
-			} else {
-				pr_err("%s v12 zy0603_disable_ssdf_and_pf_check failed\n", __func__);
-			}
-
-			if (!zy0603_seal(chip, 0)) {
-				zy0603_start_checksum_cal(chip);
-			}
-		} else {
-			zy0603_seal(chip, 0);
-		}
+		zy0603_seal(chip, 0);
 	}
 
 	return rc;
@@ -3894,7 +2896,7 @@ static int bq27441_battery_full_param_write_cmd(struct chip_bq27541 *chip)
 	}
 
 	pr_err("%s end\n", __func__);
-	return GAUGE_OK;
+	return GUAGE_OK;
 }
 
 /*ZY gauge : disable  full sleep mode*/
@@ -3970,7 +2972,7 @@ static int bq27441_battery_full_sleep_mode_cmd(struct chip_bq27541 *chip, bool e
 	}
 
 	pr_err("%s end\n", __func__);
-	return GAUGE_OK;
+	return GUAGE_OK;
 }
 
 static int bq27411_write_soc_smooth_parameter_for_zy(struct chip_bq27541 *chip, bool is_powerup)
@@ -4055,13 +3057,13 @@ static int bq27411_modify_soc_smooth_parameter
 	if(chip->batt_zy0603 && is_powerup == true) {
 		pr_err("%s batt_zy0603 begin\n", __func__);
 		zy0603_write_data_cmd(chip, false);
-		return GAUGE_OK;
+		return GUAGE_OK;
 	} else {
 		if(chip->batt_bq28z610 && is_powerup == true && gauge_i2c_err == 0) {
 			pr_err("%s batt_bq28z610 powerup\n", __func__);
 			//power up disable sleep mode
 			bq28z610_set_sleep_mode(chip, false);
-			return GAUGE_OK;
+			return GUAGE_OK;
 		}
 	}
 
@@ -4069,17 +3071,17 @@ static int bq27411_modify_soc_smooth_parameter
 		pr_err("%s  DEVICE_ZY0602 begin\n", __func__);
 		pr_err("%s  device_type = %d\n", __func__, chip->device_type);
 		bq27411_write_soc_smooth_parameter_for_zy(chip, is_powerup);
-		return GAUGE_OK;
+		return GUAGE_OK;
 	}
 
 	if (chip->modify_soc_smooth == false
 			|| chip->device_type == DEVICE_BQ27541) {
-		return GAUGE_ERROR;
+		return GUAGE_ERROR;
 	}
 	pr_err("%s begin\n", __func__);
 	if (sealed(chip)) {
 		if (!unseal(chip, BQ27411_UNSEAL_KEY)) {
-			return GAUGE_ERROR;
+			return GUAGE_ERROR;
 		} else {
 			msleep(50);
 		}
@@ -4106,7 +3108,7 @@ write_parameter:
 		seal(chip);
 	}
 	pr_err("%s end\n", __func__);
-	return GAUGE_OK;
+	return GUAGE_OK;
 }
 
 static int bq8z610_sealed(struct chip_bq27541 *chip)
@@ -4499,10 +3501,10 @@ recfg_pararm3:
 		pr_err("gauge param cfg susccess\n");
 	}
 	pr_err("%s end\n", __func__);
-	return GAUGE_OK;
+	return GUAGE_OK;
 param_cf_err:
 	pr_err("%s param_cf_err err\n", __func__);
-	return GAUGE_ERROR;
+	return GUAGE_ERROR;
 }
 
 
@@ -4513,16 +3515,16 @@ int bq28z610_batt_full_zero_parameter(struct chip_bq27541 *chip)
 
 	if (chip->device_type != DEVICE_BQ27541) {
 		pr_err("%s NOT DEVICE_BQ27541\n", __func__);
-		return GAUGE_OK;
+		return GUAGE_OK;
 	}
 
 	if (!chip->batt_bq28z610)
-		return GAUGE_OK;
+		return GUAGE_OK;
 
 	pr_err("%s begin\n", __func__);
 	if (bq8z610_sealed(chip)) {
 		if (!bq8z610_unseal(chip)) {
-			return GAUGE_OK;
+			return GUAGE_OK;
 		} else {
 			msleep(50);
 		}
@@ -4547,7 +3549,7 @@ write_parameter:
 		bq8z610_seal(chip);
 	}
 	pr_err("%s end\n", __func__);
-	return GAUGE_OK;
+	return GUAGE_OK;
 }
 
 #define REG_DUMP_SIZE  1024
@@ -4711,12 +3713,11 @@ static void bq28z610_modify_dod0_parameter(struct chip_bq27541 *chip)
 static int bq28z610_get_2cell_voltage(void)
 {
 	u8 cell_vol[BQ28Z610_MAC_CELL_VOLTAGE_SIZE] = {0, 0, 0, 0};
-	u8 cell_vol_zy0603[BQ28Z610_MAC_CELL_VOLTAGE_SIZE + 2] = {0, 0, 0, 0, 0, 0};
 
 	if (!gauge_ic) {
 		return 0;
 	}
-	if (!gauge_ic->batt_zy0603) {
+
 	mutex_lock(&bq28z610_alt_manufacturer_access);
 	bq27541_i2c_txsubcmd(gauge_ic, BQ28Z610_MAC_CELL_VOLTAGE_EN_ADDR,
 		BQ28Z610_MAC_CELL_VOLTAGE_CMD);
@@ -4726,20 +3727,6 @@ static int bq28z610_get_2cell_voltage(void)
 	mutex_unlock(&bq28z610_alt_manufacturer_access);
 	gauge_ic->batt_cell_1_vol = (cell_vol[1] << 8) | cell_vol[0];
 	gauge_ic->batt_cell_2_vol = (cell_vol[3] << 8) | cell_vol[2];
-	} else {
-		bq27541_i2c_txsubcmd(gauge_ic, BQ28Z610_MAC_CELL_VOLTAGE_EN_ADDR,
-			BQ28Z610_MAC_CELL_VOLTAGE_CMD);
-		usleep_range(U_DELAY_1_MS, U_DELAY_1_MS);
-		bq27541_read_i2c_block(gauge_ic, BQ28Z610_MAC_CELL_VOLTAGE_EN_ADDR,
-			BQ28Z610_MAC_CELL_VOLTAGE_SIZE + 2, cell_vol_zy0603);
-		/*pr_err("%s cell_vol_zy0603[0x%0x][0x%0x][0x%0x][0x%0x][0x%0x][0x%0x]\n", __func__, cell_vol_zy0603[0],
-			cell_vol_zy0603[1], cell_vol_zy0603[2], cell_vol_zy0603[3], cell_vol_zy0603[4], cell_vol_zy0603[5]);*/
-		if (cell_vol_zy0603[0] == 0x71 && cell_vol_zy0603[1] == 0x00) {
-			gauge_ic->batt_cell_1_vol = (cell_vol_zy0603[3] << 8) | cell_vol_zy0603[2];
-			gauge_ic->batt_cell_2_vol = (cell_vol_zy0603[5] << 8) | cell_vol_zy0603[4];
-		}
-	}
-
 	if (gauge_ic->batt_cell_1_vol < gauge_ic->batt_cell_2_vol) {
 		gauge_ic->batt_cell_max_vol = gauge_ic->batt_cell_2_vol;
 		gauge_ic->batt_cell_min_vol = gauge_ic->batt_cell_1_vol;
@@ -4771,48 +3758,10 @@ static int bq28z610_get_2cell_voltage(void)
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #define AUTH_MESSAGE_LEN		20
 #define AUTH_TAG "ogauge_auth="
-
-#ifdef MODULE
-#include <asm/setup.h>
-static char __oplus_chg_cmdline[COMMAND_LINE_SIZE];
-static char *oplus_chg_cmdline = __oplus_chg_cmdline;
-
-const char *oplus_chg_get_cmdline(void)
-{
-	struct device_node * of_chosen = NULL;
-	char *ogauge_auth = NULL;
-
-	if (__oplus_chg_cmdline[0] != 0)
-		return oplus_chg_cmdline;
-
-	of_chosen = of_find_node_by_path("/chosen");
-	if (of_chosen) {
-		ogauge_auth = (char *)of_get_property(
-					of_chosen, "ogauge_auth", NULL);
-		if (!ogauge_auth)
-			pr_err("%s: failed to get ogauge_auth\n", __func__);
-		else {
-			strcpy(__oplus_chg_cmdline, ogauge_auth);
-			pr_err("%s: ogauge_auth: %s\n", __func__, ogauge_auth);
-		}
-	} else {
-		pr_err("%s: failed to get /chosen \n", __func__);
-	}
-
-	return oplus_chg_cmdline;
-}
-#else
-const char *oplus_chg_get_cmdline(void)
-{
-	return saved_command_line;
-}
-#endif
-
 static int get_auth_msg(u8 *source, u8 *rst) {
 	char *str = NULL;
 	int i;
-
-	str = strstr(oplus_chg_get_cmdline(), AUTH_TAG);
+	str = strstr(saved_command_line, AUTH_TAG);
 	if (str == NULL) {
 		pr_err("Asynchronous authentication is not supported!!!\n");
 		return -1;
@@ -5163,7 +4112,6 @@ rerun :
 	bq27541_hw_config(fg_ic);
 
 	if (fg_ic->batt_zy0603) {
-		rc = zy0603_parse_afi_buf(fg_ic);
 		dev_err(&client->dev, "zy0603 support and can't config gauge param\n");
 	} else {
 		dev_err(&client->dev, "2020 0924 param\n");
@@ -5212,15 +4160,7 @@ rerun :
 	fg_ic->min_vol_pre = 3800;
 	fg_ic->current_pre = 999;
 
-	/*for zy0603 battery protect cuase turn off mos*/
-	fg_ic->protect_check_done = false;
-	fg_ic->afi_update_done = true;
-	fg_ic->disabled = false;
-	fg_ic->error_occured = false;
-	fg_ic->need_check = true;
-	INIT_DELAYED_WORK(&fg_ic->afi_update, zy0603_afi_update_work);
 	rc = bq27411_modify_soc_smooth_parameter(fg_ic, true);
-	fg_ic->protect_check_done = true;
 
 	if(rc == BATT_FULL_ERROR && rerun_num > 0)
 		goto rerun;//only for wite battery full param in guage dirver probe on 7250 platform
@@ -5336,7 +4276,6 @@ int bq27541_driver_init(void)
 
 	return ret;
 }
-
 void bq27541_driver_exit(void)
 {
 	i2c_del_driver(&bq27541_i2c_driver);

@@ -1,13 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 
 #define VOOC_MCU_N76E
 
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
-#include <linux/version.h>
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
@@ -21,9 +16,7 @@
 #include <linux/platform_device.h>
 #include <asm/atomic.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 #include <linux/xlog.h>
-#endif
 //#include <upmu_common.h>
 //#include <mt-plat/mtk_gpio.h>
 #include <linux/dma-mapping.h>
@@ -718,11 +711,6 @@ struct i2c_driver n76e_i2c_driver = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 static int __init n76e_subsys_init(void)
 #else
-void  n76e_subsys_exit(void)
-{
-	i2c_del_driver(&n76e_i2c_driver);
-}
-
 int n76e_subsys_init(void)
 #endif
 {

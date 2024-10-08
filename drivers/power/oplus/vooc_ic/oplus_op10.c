@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 #define VOOC_ASIC_OP10
 
 #include <linux/kernel.h>
@@ -1055,8 +1051,6 @@ static int op10_driver_probe(struct i2c_client *client, const struct i2c_device_
 
 	init_proc_vooc_fw_check();
 
-	oplus_vooc_bcc_curves_init(chip);
-
 	the_chip = chip;
 	chg_debug("op10 success\n");
 	return 0;
@@ -1093,11 +1087,6 @@ struct i2c_driver op10_i2c_driver = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 static int __init op10_subsys_init(void)
 #else
-void op10_subsys_exit(void)
-{
-	i2c_del_driver(&op10_i2c_driver);
-}
-
 int op10_subsys_init(void)
 #endif
 {

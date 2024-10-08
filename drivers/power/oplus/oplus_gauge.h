@@ -1,7 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only  */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 
 #ifndef _OPLUS_GAUGE_H_
 #define _OPLUS_GAUGE_H_
@@ -75,14 +71,8 @@ struct oplus_gauge_operations {
 	int (*get_passdchg) (int *val);
 	void (*set_float_uv_ma)(int, int);
 	int (*dump_register) (void);
-	int (*protect_check) (void);
-	bool (*afi_update_done) (void);
 	int (*set_allow_reading)(int enable);
 	int (*wlchg_started_status)(bool status);
-	int (*get_bcc_parameters)(char *buf);
-	int (*get_update_bcc_parameters)(char *buf);
-	int (*get_prev_bcc_parameters)(char *buf);
-	int (*set_bcc_parameters)(const char *buf);
 };
 
 /****************************************
@@ -146,8 +136,6 @@ int oplus_gauge_get_prev_batt_soc(void);
 int oplus_gauge_get_prev_batt_current(void);
 int oplus_gauge_get_prev_remaining_capacity(void);
 int oplus_gauge_get_prev_batt_fcc(void);
-int oplus_gauge_protect_check(void);
-bool oplus_gauge_afi_update_done(void);
 int oplus_gauge_update_battery_dod0(void);
 int oplus_gauge_update_soc_smooth_parameter(void);
 int oplus_gauge_get_battery_cb_status(void);
@@ -162,10 +150,6 @@ int oplus_gauge_get_sub_batt_soc(void);
 int oplus_gauge_get_sub_batt_temperature(void);
 bool oplus_gauge_get_sub_batt_authenticate(void);
 void exfg_information_register(struct oplus_gauge_operations *exfg);
-int oplus_gauge_get_bcc_parameters(char *buf);
-int oplus_gauge_fastchg_update_bcc_parameters(char *buf);
-int oplus_gauge_get_prev_bcc_parameters(char *buf);
-int oplus_gauge_set_bcc_parameters(const char *buf);
 
 #if defined(CONFIG_OPLUS_CHARGER_MTK6763) || defined(CONFIG_OPLUS_CHARGER_MTK6771)
 extern int oplus_fuelgauged_init_flag;

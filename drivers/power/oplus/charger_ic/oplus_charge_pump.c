@@ -5,7 +5,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
-#include <linux/version.h>
+
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/slab.h>
 #include <linux/irq.h>
@@ -17,15 +17,13 @@
 #include <linux/kobject.h>
 #include <linux/platform_device.h>
 #include <asm/atomic.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 #include <linux/xlog.h>
-#include <mt-plat/mtk_rtc.h>
-#include <mt-plat/charger_type.h>
-#include <soc/oplus/device_info.h>
-#endif
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <linux/module.h>
+#include <mt-plat/mtk_rtc.h>
+#include <mt-plat/charger_type.h>
+#include <soc/oplus/device_info.h>
 #else
 #include <linux/debugfs.h>
 #include <linux/gpio.h>
@@ -717,7 +715,6 @@ int proc_charge_pump_open(struct inode *inode, struct file *file)
     return single_open(file, charge_pump_read_func, PDE_DATA(inode));
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 static const struct file_operations proc_work_mode_ops = {
     .read  = proc_charge_pump_work_mode_read,
     .write = proc_charge_pump_work_mode_write,
@@ -731,19 +728,6 @@ static const struct file_operations proc_register_ops = {
     .open  = proc_charge_pump_open,
     .owner = THIS_MODULE,
 };
-#else
-static const struct proc_ops proc_work_mode_ops = {
-	.proc_read  = proc_charge_pump_work_mode_read,
-	.proc_write = proc_charge_pump_work_mode_write,
-	.proc_open  = simple_open,
-};
-
-static const struct proc_ops proc_register_ops = {
-	.proc_read  = seq_read,
-	.proc_write = proc_charge_pump_reg_write,
-	.proc_open  = proc_charge_pump_open,
-};
-#endif
 
 static int init_charge_pump_proc(struct chip_charge_pump *da)
 {
@@ -915,31 +899,7 @@ static struct i2c_driver charge_pump_i2c_driver = {
     .shutdown	= charge_pump_shutdown,
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 module_i2c_driver(charge_pump_i2c_driver);
-#else
-int charge_pump_driver_init(void)
-{
-	int ret = 0;
-
-	chg_debug(" start\n");
-
-	if (i2c_add_driver(&charge_pump_i2c_driver) != 0) {
-		chg_err(" failed to register charge pump i2c driver.\n");
-	} else {
-		chg_debug( " Success to register charge pump i2c driver.\n");
-	}
-
-	return ret;
-}
-
-void charge_pump_driver_exit(void)
-{
-	i2c_del_driver(&charge_pump_i2c_driver);
-}
-
-#endif /*LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)*/
-
 MODULE_DESCRIPTION("Driver for charge_pump divider chip");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("i2c:charge_pump-divider");

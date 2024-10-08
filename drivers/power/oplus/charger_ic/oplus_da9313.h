@@ -1,9 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only  */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
-
 #ifndef __OPLUS_DA9313_H__
 
 #define __OPLUS_DA9313_H__

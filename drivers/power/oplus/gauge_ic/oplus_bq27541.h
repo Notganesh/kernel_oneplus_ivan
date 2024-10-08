@@ -1,8 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only  */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 #ifndef __OPLUS_BQ27541_H__
 #define __OPLUS_BQ27541_H__
 
@@ -233,20 +228,6 @@
 #define BQ28Z610_MAC_CELL_VOLTAGE_ADDR			0x40
 #define BQ28Z610_MAC_CELL_VOLTAGE_SIZE			4//total 34byte,only read 4byte(aaAA bbBB)
 
-#define BQ28Z610_MAC_CELL_DOD0_EN_ADDR			0x3E
-#define BQ28Z610_MAC_CELL_DOD0_CMD				0x0074
-#define BQ28Z610_MAC_CELL_DOD0_ADDR				0x4A
-#define BQ28Z610_MAC_CELL_DOD0_SIZE				6
-
-#define ZY0603_MAC_CELL_SOCCAL0				0x56
-
-#define BQ28Z610_MAC_CELL_QMAX_EN_ADDR			0x3E
-#define BQ28Z610_MAC_CELL_QMAX_CMD				0x0075
-#define BQ28Z610_MAC_CELL_QMAX_ADDR_A			0x40
-#define BQ28Z610_MAC_CELL_QMAX_ADDR_B			0x48
-#define BQ28Z610_MAC_CELL_QMAX_SIZE_A			4
-#define BQ28Z610_MAC_CELL_QMAX_SIZE_B			2
-
 #define BQ28Z610_MAC_CELL_BALANCE_TIME_EN_ADDR	0x3E
 #define BQ28Z610_MAC_CELL_BALANCE_TIME_CMD		0x0076
 #define BQ28Z610_MAC_CELL_BALANCE_TIME_ADDR		0x40
@@ -263,12 +244,6 @@
 #define BQ28Z610_DEVICE_CHEMISTRY_ADDR			0x40
 #define BQ28Z610_DEVICE_CHEMISTRY_SIZE			4
 
-#define U_DELAY_1_MS	1000
-#define U_DELAY_5_MS	5000
-#define M_DELAY_10_S	10000
-
-#define BCC_PARMS_COUNT 18
-#define BCC_PARMS_COUNT_LEN 69
 struct cmd_address {
 /*      bq27411 standard cmds     */
 	u8	reg_cntl;
@@ -445,20 +420,6 @@ struct chip_bq27541 {
 
 	bool battery_full_param;//only for wite battery full param in guage dirver probe on 7250 platform
 	int sha1_key_index;
-	struct delayed_work afi_update;
-	bool afi_update_done;
-	bool protect_check_done;
-	bool disabled;
-	bool error_occured;
-	bool need_check;
-	unsigned int afi_count;
-	unsigned int zy_dts_qmax_min;
-	unsigned int zy_dts_qmax_max;
-	const u8 *static_df_checksum_3e;
-	const u8 *static_df_checksum_60;
-	const u8 **afi_buf;
-	unsigned int *afi_buf_len;
-
 	bool batt_bq28z610;
 	bool batt_zy0603;
 	bool bq28z610_need_balancing;
@@ -468,15 +429,6 @@ struct chip_bq27541 {
 	struct bq27541_authenticate_data *authenticate_data;
 	struct file_operations *authenticate_ops;
 	struct oplus_gauge_chip	*oplus_gauge;
-
-	int batt_dod0_1;
-	int batt_dod0_2;
-	int batt_dod0_passed_q;
-
-	int batt_qmax_1;
-	int batt_qmax_2;
-	int batt_qmax_passed_q;
-	int bcc_buf[BCC_PARMS_COUNT];
 };
 
 extern bool oplus_gauge_ic_chip_is_null(void);

@@ -1,15 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 #define VOOC_ASIC_RK826
 
 #include <linux/kernel.h>
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
 #include <linux/delay.h>
-#include <linux/version.h>
+
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
@@ -23,10 +18,7 @@
 #include <linux/platform_device.h>
 #include <asm/atomic.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 #include <linux/xlog.h>
-#endif
-#include <mt-plat/mtk_boot_common.h>
 //#include <upmu_common.h>
 //#include <mt-plat/mtk_gpio.h>
 #include <linux/dma-mapping.h>
@@ -241,7 +233,7 @@ static int i2c_dma_write(struct i2c_client *client, u8 addr, s32 len, u8 const *
 
 static int oplus_i2c_dma_read(struct i2c_client *client, u16 addr, s32 len, u8 *rxbuf)
 {
-	int ret = 0;
+	int ret;
 	s32 retry = 0;
 	u8 buffer[2] = {0};
 	struct i2c_msg msg[2] = {
@@ -1424,8 +1416,8 @@ int rk826_get_battery_mvolts_current(void)
 		the_bat.uv_bat = 0;
 		return -1;
 	}
-	/*chg_err("kilody read 0x52C0 :read_buf[0]=0x%x,read_buf[1]=0x%x,read_buf[2]=0x%x,read_buf[3]=0x%x,\n",
-			read_buf[0],read_buf[1], read_buf[2], read_buf[3]);*/
+	chg_err("kilody read 0x52C0 :read_buf[0]=0x%x,read_buf[1]=0x%x,read_buf[2]=0x%x,read_buf[3]=0x%x,\n",
+			read_buf[0],read_buf[1], read_buf[2], read_buf[3]);
 	uv_bat = (read_buf[3] << 8) | read_buf[2];
 	ret = oplus_i2c_dma_read(the_chip->client, REG_HOST, 4, read_buf);
 	if (ret < 0) {
@@ -1433,8 +1425,8 @@ int rk826_get_battery_mvolts_current(void)
 		the_bat.current_bat = 0;
 		return -1;
 	}
-	/*chg_err("kilody read 0x52C8 :read_buf[0]=0x%x,read_buf[1]=0x%x,read_buf[2]=0x%x,read_buf[3]=0x%x,\n",
-			read_buf[0],read_buf[1], read_buf[2], read_buf[3]);*/
+	chg_err("kilody read 0x52C8 :read_buf[0]=0x%x,read_buf[1]=0x%x,read_buf[2]=0x%x,read_buf[3]=0x%x,\n",
+			read_buf[0],read_buf[1], read_buf[2], read_buf[3]);
 	current_bat = (read_buf[3] << 24) | (read_buf[2] << 16) | (read_buf[1] << 8) | read_buf[0];
 	if((uv_bat != 0)&&(uv_bat != 0xffff)){
 		if((the_bat.uv_bat == 0 ) || ((abs(uv_bat - the_bat.uv_bat)) < 500)) {
@@ -1809,7 +1801,6 @@ static int rk826_driver_probe(struct i2c_client *client, const struct i2c_device
 	register_vooc_devinfo();
 	init_proc_vooc_fw_check();
 	init_proc_rk826_current();
-	oplus_vooc_bcc_curves_init(chip);
 	the_chip = chip;
 	chg_debug("rk826 success\n");
 	return 0;

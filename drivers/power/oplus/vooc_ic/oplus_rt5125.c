@@ -1,14 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 #define VOOC_ASIC_RT5125
 
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/delay.h>
-#include <linux/version.h>
+
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
@@ -21,9 +16,8 @@
 #include <linux/kobject.h>
 #include <linux/platform_device.h>
 #include <asm/atomic.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
+
 #include <linux/xlog.h>
-#endif
 #include <linux/dma-mapping.h>
 
 #include <linux/module.h>

@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2021 Oplus. All rights reserved.
- */
 
 #include <linux/init.h>		/* For init/exit macros */
 #include <linux/module.h>	/* For MODULE_ marcros  */
@@ -3793,11 +3789,6 @@ static int usb_icl[] = {
 	300, 500, 900, 1200, 1350, 1500, 2000, 2400, 3000,
 };
 
-#define BATT_VOLT_FLAG		4100
-#define SW_AICL_POINT_LOW	4500
-#define SW_AICL_POINT_HIGH	4550
-#define SW_AICL_POINT_PDQC	7600
-
 static int oplus_mt6360_input_current_limit_write(int value)
 {
 	int rc = 0;
@@ -3839,24 +3830,10 @@ static int oplus_mt6360_input_current_limit_write(int value)
 		g_oplus_chip->charger_current_pre = value;
 	}
 
-	if (g_oplus_chip->dual_charger_support ||
-		g_oplus_chip->chg_ops->get_charger_subtype() == CHARGER_SUBTYPE_QC ||
-		g_oplus_chip->chg_ops->get_charger_subtype() == CHARGER_SUBTYPE_PD) {
-		chg_vol = battery_meter_get_charger_voltage();
-		if (chg_vol > SW_AICL_POINT_PDQC) {
-			aicl_point = SW_AICL_POINT_PDQC;
-		} else {
-			if (g_oplus_chip->batt_volt > BATT_VOLT_FLAG )
-				aicl_point = SW_AICL_POINT_HIGH;
-			else
-				aicl_point = SW_AICL_POINT_LOW;
-		}
-	} else {
-		if (g_oplus_chip->batt_volt > BATT_VOLT_FLAG )
-			aicl_point = SW_AICL_POINT_HIGH;
-		else
-			aicl_point = SW_AICL_POINT_LOW;
-	}
+	if (g_oplus_chip->batt_volt > 4100)
+		aicl_point = 4550;
+	else
+		aicl_point = 4500;
 
 	if (value < 500) {
 		i = 0;
@@ -5146,7 +5123,7 @@ int oplus_get_otg_online_status(void)
 				__func__, level ? "H" : "L", typec_otg, online);
 	}
 
-	chip->otg_online = typec_otg;
+	chip->otg_online = online;
 	return online;
 }
 
@@ -5222,7 +5199,7 @@ void oplus_ccdetect_enable(void)
 	}
 	/* set DRP mode */
 	if (pinfo != NULL && pinfo->tcpc != NULL){
-		tcpm_typec_change_role(pinfo->tcpc,TYPEC_ROLE_TRY_SNK);
+		tcpm_typec_change_role(pinfo->tcpc, TYPEC_ROLE_TRY_SNK);
 		pr_err("%s: set drp", __func__);
 	}
 
@@ -6455,6 +6432,7 @@ int oplus_chg_set_qc_config_forsvooc(void)
 {
 	int ret = -1;
 	struct oplus_chg_chip *chip = g_oplus_chip;
+
 	if (!chip) {
 		pr_err("oplus_chip is null\n");
 		return -1;
@@ -6644,7 +6622,7 @@ void oplus_chg_set_camera_on(bool val)
 				if (g_oplus_chip->chg_ops->get_charger_subtype() == CHARGER_SUBTYPE_QC){
 					oplus_chg_set_qc_config();
 				} else if (g_oplus_chip->chg_ops->get_charger_subtype() == CHARGER_SUBTYPE_PD
-					&& !(is_mtksvooc_project == true && g_oplus_chip->pd_svooc == true)){
+					&& !(is_mtksvooc_project == true && g_oplus_chip->pd_svooc == true)) {
 					oplus_mt6360_pd_setup();
 				} else {
 					oplus_chg_set_flash_led_status(g_oplus_chip->camera_on);
@@ -6691,17 +6669,16 @@ EXPORT_SYMBOL(oplus_chg_set_camera_on);
 
 
 //====================================================================//
-void oplus_set_typec_sinkonly(void)
+void oplus_set_typec_sinkonly()
 {
 	if (pinfo != NULL && pinfo->tcpc != NULL) {
-		tcpm_typec_disable_function(pinfo->tcpc, false);
 		printk(KERN_ERR "[OPLUS_CHG][%s]: usbtemp occur otg switch[0]\n", __func__);
 		tcpm_typec_change_role(pinfo->tcpc, TYPEC_ROLE_SNK);
 	}
 };
 
 #ifdef OPLUS_FEATURE_CHG_BASIC
-void oplus_set_typec_cc_open(void)
+void oplus_set_typec_cc_open()
 {
 	if (pinfo == NULL || pinfo->tcpc == NULL)
 		return;
@@ -7779,67 +7756,66 @@ static void mtk_charger_shutdown(struct platform_device *dev)
 static unsigned long suspend_tm_sec = 0;
 static int get_current_time(unsigned long *now_tm_sec)
 {
-    struct rtc_time tm;
-    struct rtc_device *rtc = NULL;
-    int rc = 0;
+	struct rtc_time tm;
+	struct rtc_device *rtc = NULL;
+	int rc = 0;
 
-    rtc = rtc_class_open(CONFIG_RTC_HCTOSYS_DEVICE);
-    if (rtc == NULL) {
-        chg_err("%s: unable to open rtc device (%s)\n",
-        __FILE__, CONFIG_RTC_HCTOSYS_DEVICE);
-        return -EINVAL;
-    }
+	rtc = rtc_class_open(CONFIG_RTC_HCTOSYS_DEVICE);
+	if (rtc == NULL) {
+		chg_err("%s: unable to open rtc device (%s)\n",
+		__FILE__, CONFIG_RTC_HCTOSYS_DEVICE);
+		return -EINVAL;
+	}
 
-    rc = rtc_read_time(rtc, &tm);
-    if (rc) {
-        chg_err("Error reading rtc device (%s) : %d\n",
-        CONFIG_RTC_HCTOSYS_DEVICE, rc);
-        goto close_time;
-    }
+	rc = rtc_read_time(rtc, &tm);
+	if (rc) {
+		chg_err("Error reading rtc device (%s) : %d\n",
+		CONFIG_RTC_HCTOSYS_DEVICE, rc);
+		goto close_time;
+	}
 
-    rc = rtc_valid_tm(&tm);
-    if (rc) {
-        chg_err("Invalid RTC time (%s): %d\n",
-        CONFIG_RTC_HCTOSYS_DEVICE, rc);
-        goto close_time;
-    }
-    rtc_tm_to_time(&tm, now_tm_sec);
+	rc = rtc_valid_tm(&tm);
+	if (rc) {
+		chg_err("Invalid RTC time (%s): %d\n",
+		CONFIG_RTC_HCTOSYS_DEVICE, rc);
+		goto close_time;
+	}
+	rtc_tm_to_time(&tm, now_tm_sec);
 
-    close_time:
-        rtc_class_close(rtc);
-    return rc;
+	close_time:
+		rtc_class_close(rtc);
+	return rc;
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 static int mtk_charger_pm_resume(struct device *dev)
 {
-    unsigned long resume_tm_sec = 0;
-    unsigned long sleep_time = 0;
-    int rc = 0;
+	unsigned long resume_tm_sec = 0;
+	unsigned long sleep_time = 0;
+	int rc = 0;
 	if (!g_oplus_chip) {
 		return 0;
 	}
 	if (g_oplus_chip->chg_ops != &mtk6360_chg_ops) {
 		return 0;
 	}
-    rc = get_current_time(&resume_tm_sec);
-    if (rc || suspend_tm_sec == -1) {
-        chg_err("RTC read failed\n");
-        sleep_time = 0;
-    } else {
-        sleep_time = resume_tm_sec - suspend_tm_sec;
-    }
-    /*
-    if(sleep_time < 0) {
-    sleep_time = 0;
-    }
-    */
+	rc = get_current_time(&resume_tm_sec);
+	if (rc || suspend_tm_sec == -1) {
+		chg_err("RTC read failed\n");
+		sleep_time = 0;
+	} else {
+		sleep_time = resume_tm_sec - suspend_tm_sec;
+	}
+	/*
+	if(sleep_time < 0) {
+	sleep_time = 0;
+	}
+	*/
 
 	if (sleep_time > 60) {
 		oplus_chg_soc_update_when_resume(sleep_time);
 	}
-    return 0;
-
+	return 0;
 }
 
 static int mtk_charger_pm_suspend(struct device *dev)
@@ -7851,12 +7827,11 @@ static int mtk_charger_pm_suspend(struct device *dev)
 		return 0;
 	}
 
-    if (get_current_time(&suspend_tm_sec)) {
-        chg_err("RTC read failed\n");
-        suspend_tm_sec = -1;
-    }
-    return 0;
-
+	if (get_current_time(&suspend_tm_sec)) {
+		chg_err("RTC read failed\n");
+		suspend_tm_sec = -1;
+	}
+	return 0;
 }
 
 static const struct dev_pm_ops mtk_charger_pm_ops = {
@@ -7866,9 +7841,9 @@ static const struct dev_pm_ops mtk_charger_pm_ops = {
 #else
 static int mtk_charger_resume(struct i2c_client *client)
 {
-    unsigned long resume_tm_sec = 0;
-    unsigned long sleep_time = 0;
-    int rc = 0;
+	unsigned long resume_tm_sec = 0;
+	unsigned long sleep_time = 0;
+	int rc = 0;
 
 	if (!g_oplus_chip) {
 		return 0;
@@ -7877,22 +7852,22 @@ static int mtk_charger_resume(struct i2c_client *client)
 		return 0;
 	}
 
-    rc = get_current_time(&resume_tm_sec);
-    if (rc || suspend_tm_sec == -1) {
-        chg_err("RTC read failed\n");
-        sleep_time = 0;
-    } else {
-        sleep_time = resume_tm_sec - suspend_tm_sec;
-    }
-    /*
-    if(sleep_time < 0) {
-    sleep_time = 0;
-    }
-    */
-    if (sleep_time > 60) {
+	rc = get_current_time(&resume_tm_sec);
+	if (rc || suspend_tm_sec == -1) {
+		chg_err("RTC read failed\n");
+		sleep_time = 0;
+	} else {
+		sleep_time = resume_tm_sec - suspend_tm_sec;
+	}
+	/*
+	if(sleep_time < 0) {
+	sleep_time = 0;
+	}
+	*/
+	if (sleep_time > 60) {
 		oplus_chg_soc_update_when_resume(sleep_time);
-    }
-    return 0;
+	}
+	return 0;
 }
 
 static int mtk_charger_suspend(struct i2c_client *client, pm_message_t mesg)
@@ -7904,11 +7879,11 @@ static int mtk_charger_suspend(struct i2c_client *client, pm_message_t mesg)
 		return 0;
 	}
 
-    if (get_current_time(&suspend_tm_sec)) {
-        chg_err("RTC read failed\n");
-        suspend_tm_sec = -1;
-    }
-    return 0;
+	if (get_current_time(&suspend_tm_sec)) {
+		chg_err("RTC read failed\n");
+		suspend_tm_sec = -1;
+	}
+	return 0;
 }
 #endif
 #endif

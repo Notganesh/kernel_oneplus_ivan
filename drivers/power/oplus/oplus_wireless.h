@@ -1,7 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 
 #ifndef _OPLUS_WPC_H_
 #define _OPLUS_WPC_H_
@@ -20,7 +16,6 @@
 #ifndef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/soc/qcom/smem.h>
 #endif
-#include "op_wlchg_v2/oplus_chg_wls.h"
 
 #define SUPPORT_WPC
 #define SUPPORT_OPLUS_WPC_VERIFY
@@ -279,6 +274,13 @@ typedef enum {
 	WPC_CHG_IC_ERR_TX_CEPTIMEOUT,
 	WPC_CHG_IC_ERR_UNKNOW,
 }E_WPC_CHG_ERR_TYPE;
+
+enum wls_status_keep_type {
+	WLS_SK_NULL,
+	WLS_SK_BY_KERNEL,
+	WLS_SK_BY_HAL,
+	WLS_SK_WAIT_TIMEOUT,
+};
 
 enum wireless_mode {
 	WIRELESS_MODE_NULL,
@@ -548,6 +550,10 @@ struct gauge_auth_result {
 	unsigned char rcv_msg[GAUGE_AUTH_MSG_LEN];
 };
 
+struct wls_auth_result {
+	unsigned char random_num[WLS_AUTH_RANDOM_LEN];
+	unsigned char encode_num[WLS_AUTH_ENCODE_LEN];
+};
 
 struct oplus_chg_auth_result {
 	struct gauge_auth_result rst_k0;

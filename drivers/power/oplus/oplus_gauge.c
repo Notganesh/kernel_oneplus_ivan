@@ -1,8 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 #include "oplus_gauge.h"
 #include "oplus_charger.h"
 #include <linux/module.h>
@@ -238,8 +233,7 @@ int oplus_gauge_get_batt_temperature(void)
 			}
 		batt_temp = g_gauge_chip->gauge_ops->get_battery_temperature();
 
-		if (get_eng_version() == HIGH_TEMP_AGING ||
-		    oplus_is_ptcrb_version()) {
+		if (get_eng_version() == HIGH_TEMP_AGING) {
 			printk(KERN_ERR "[OPLUS_CHG]CONFIG_HIGH_TEMP_VERSION enable here, \
 					disable high tbat shutdown \n");
 			if (batt_temp > 690)
@@ -529,8 +523,7 @@ int oplus_gauge_get_prev_batt_temperature(void)
 		}
 		batt_temp = g_gauge_chip->gauge_ops->get_prev_battery_temperature();
 
-		if (get_eng_version() == HIGH_TEMP_AGING ||
-		    oplus_is_ptcrb_version()) {
+		if (get_eng_version() == HIGH_TEMP_AGING) {
 			printk(KERN_ERR "[OPLUS_CHG]CONFIG_HIGH_TEMP_VERSION enable here, \
 			disable high tbat shutdown \n");
 			if (batt_temp > 690)
@@ -642,31 +635,6 @@ int oplus_gauge_get_prev_batt_fcc(void)
 		}
 	}
 }
-
-int oplus_gauge_protect_check(void)
-{
-	if (!g_gauge_chip) {
-		return 0;
-	} else {
-		if (g_gauge_chip->gauge_ops && g_gauge_chip->gauge_ops->protect_check) {
-			return g_gauge_chip->gauge_ops->protect_check();
-		}
-		return 0;
-	}
-}
-
-bool oplus_gauge_afi_update_done(void)
-{
-	if (!g_gauge_chip) {
-		return false;
-	} else {
-		if (g_gauge_chip->gauge_ops && g_gauge_chip->gauge_ops->afi_update_done) {
-			return g_gauge_chip->gauge_ops->afi_update_done();
-		}
-		return false;
-	}
-}
-
 int oplus_gauge_get_passedchg(int *val)
 {
 	int ret;
@@ -746,8 +714,7 @@ int oplus_gauge_get_sub_batt_temperature(void)
 			}
 		batt_temp = g_sub_gauge_chip->gauge_ops->get_battery_temperature();
 
-		if (get_eng_version() == HIGH_TEMP_AGING ||
-		    oplus_is_ptcrb_version()) {
+		if (get_eng_version() == HIGH_TEMP_AGING) {
 			printk(KERN_ERR "[OPLUS_CHG]CONFIG_HIGH_TEMP_VERSION enable here, \
 					disable high tbat shutdown \n");
 			if (batt_temp > 690)
@@ -766,52 +733,3 @@ bool oplus_gauge_get_sub_batt_authenticate(void)
 		return g_sub_gauge_chip->gauge_ops->get_battery_authenticate();
 	}
 }
-
-int oplus_gauge_get_bcc_parameters(char *buf)
-{
-	if (!g_gauge_chip)
-		return 0;
-	else {
-		if (g_gauge_chip->gauge_ops && g_gauge_chip->gauge_ops->get_bcc_parameters) {
-			g_gauge_chip->gauge_ops->get_bcc_parameters(buf);
-		}
-		return 0;
-	}
-}
-
-int oplus_gauge_fastchg_update_bcc_parameters(char *buf)
-{
-	if (!g_gauge_chip)
-		return 0;
-	else {
-		if (g_gauge_chip->gauge_ops && g_gauge_chip->gauge_ops->get_update_bcc_parameters) {
-			g_gauge_chip->gauge_ops->get_update_bcc_parameters(buf);
-		}
-		return 0;
-	}
-}
-
-int oplus_gauge_get_prev_bcc_parameters(char *buf)
-{
-	if (!g_gauge_chip)
-		return 0;
-	else {
-		if (g_gauge_chip->gauge_ops && g_gauge_chip->gauge_ops->get_prev_bcc_parameters) {
-			g_gauge_chip->gauge_ops->get_prev_bcc_parameters(buf);
-		}
-		return 0;
-	}
-}
-
-int oplus_gauge_set_bcc_parameters(const char *buf)
-{
-	if (!g_gauge_chip)
-		return 0;
-	else {
-		if (g_gauge_chip->gauge_ops && g_gauge_chip->gauge_ops->set_bcc_parameters) {
-			g_gauge_chip->gauge_ops->set_bcc_parameters(buf);
-		}
-		return 0;
-	}
-}
-

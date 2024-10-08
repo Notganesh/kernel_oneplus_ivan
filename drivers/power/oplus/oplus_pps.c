@@ -1,8 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 #include <linux/delay.h>
 #include <linux/power_supply.h>
 #include <linux/proc_fs.h>
@@ -61,6 +56,8 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0))
 #include <linux/msm_bcl.h>
 #endif
+//#include <linux/ktime.h>
+//#include <linux/kernel.h>
 #endif
 
 #include "oplus_charger.h"
@@ -105,14 +102,6 @@ int __attribute__((weak)) oplus_chg_set_pd_5v(void)
 	return 0;
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
-static struct timespec current_kernel_time(void)
-{
-	struct timespec ts;
-	getnstimeofday(&ts);
-	return ts;
-}
-#endif
 
 static struct oplus_pps_chip g_pps_chip;
 
@@ -129,6 +118,15 @@ static const char * const strategy_temp[] = {
 	[BATT_CURVE_TEMP_120_TO_160]	= "strategy_temp_120_to_160",
 	[BATT_CURVE_TEMP_160_TO_430]	= "strategy_temp_160_to_430",
 };
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+static struct timespec current_kernel_time(void)
+{
+	struct timespec ts;
+	getnstimeofday(&ts);
+    return ts;
+}
+#endif
 
 static int oplus_pps_parse_batt_curves(struct oplus_pps_chip *chip)
 {
@@ -148,14 +146,14 @@ static int oplus_pps_parse_batt_curves(struct oplus_pps_chip *chip)
 		return -EINVAL;
 	}
 
-	for (i = 0; i < BATT_CURVE_SOC_MAX; i++) {
+	for (i=0; i<BATT_CURVE_SOC_MAX; i++) {
 		soc_node = of_get_child_by_name(pps_node, strategy_soc[i]);
 		if (!soc_node) {
 			pr_err("Can not find %s node\n", strategy_soc[i]);
 			return -EINVAL;
 		}
 
-		for (j = 0; j < BATT_CURVE_TEMP_MAX; j++) {
+		for (j=0; j<BATT_CURVE_TEMP_MAX; j++) {
 			rc = of_property_count_elems_of_size(soc_node, strategy_temp[j], sizeof(u32));
 			if (rc < 0) {
 				pr_err("Count %s failed, rc=%d\n", strategy_temp[j], rc);
@@ -195,9 +193,9 @@ static int oplus_pps_parse_batt_curves(struct oplus_pps_chip *chip)
 		}
 	}
 
-	for (i = 0; i < BATT_CURVE_SOC_MAX; i++) {
-		for (j = 0; j < BATT_CURVE_TEMP_MAX; j++) {
-			for (k = 0; k < chip->batt_curves_soc[i].batt_curves_temp[j].batt_curve_num; k++) {
+	for (i=0; i< BATT_CURVE_SOC_MAX; i++) {
+		for (j=0; j<BATT_CURVE_TEMP_MAX; j++) {
+			for (k=0; k<chip->batt_curves_soc[i].batt_curves_temp[j].batt_curve_num; k++) {
 				pr_err("%s: %d %d %d %d %d\n", __func__,
 					chip->batt_curves_soc[i].batt_curves_temp[j].batt_curves[k].target_vbus,
 					chip->batt_curves_soc[i].batt_curves_temp[j].batt_curves[k].target_vbat,
@@ -601,6 +599,7 @@ static int oplus_pps_get_status(struct oplus_pps_chip *chip)
 
 	ret = chip->ops->get_input_volt();
 	chip->ap_input_volt = ret & 0xffff;
+	//chip->ap_system_current = chip->chg_ops->get_charger_current() / 1000;
 	chip->ap_input_current = - chip->ap_batt_current;
 	chg_err("batt volt= %d, batt current= %d, input volt= %d, input current= %d\n",
 			chip->ap_batt_volt, chip->ap_batt_current,
@@ -769,7 +768,7 @@ static int oplus_pps_charging_enable(struct oplus_pps_chip *chip, bool on)
 
 #define COUNTS	2
 static int oplus_pps_get_batt_temp_curr(
-	struct oplus_pps_chip *chip, int vbat_temp_cur)
+    struct oplus_pps_chip *chip, int vbat_temp_cur)
 {
 	static int ret = 0;
 
@@ -912,6 +911,7 @@ static int oplus_pps_get_batt_temp_curr(
 			chip->pps_strategy_change_count = 0;
 			chip->pps_fastchg_batt_temp_status = PPS_BAT_TEMP_HIGH2;
 			ret = chip->pps_strategy1_high_power2;
+			;
 		}
 		break;
 	case PPS_BAT_TEMP_LOW0:
@@ -983,7 +983,7 @@ static int oplus_pps_get_batt_temp_curr(
 	default:
 		break;
 	}
-
+	
 	chg_err("the ret: %d, the temp =%d, status = %d\r\n", ret, vbat_temp_cur,
 	        chip->pps_fastchg_batt_temp_status);
 
@@ -1081,8 +1081,9 @@ static void oplus_pps_tick_timer(struct oplus_pps_chip *chip)
 
 	ts_current = current_kernel_time();
 
-	if ((ts_current.tv_sec - chip->fastchg_timer.tv_sec) >= UPDATE_FASTCHG_TIME) {
+	if ((ts_current.tv_sec - chip->fastchg_timer.tv_sec) >= update_fastchg_time) {
 		chip->fastchg_timer = ts_current;
+		//chip->set_fastchg_flag = 1;
 		if (oplus_pps_get_curve_time(chip) > 0) {
 			chip->fast3c_timeout_time++;
 		}
@@ -1091,17 +1092,17 @@ static void oplus_pps_tick_timer(struct oplus_pps_chip *chip)
 		}
 	}
 
-	if ((ts_current.tv_sec - chip->pdo_timer.tv_sec) >= UPDATE_PDO_TIME) {
+	if ((ts_current.tv_sec - chip->pdo_timer.tv_sec) >= update_pdo_time) {
 		chip->pdo_timer = ts_current;
 		chip->set_pdo_flag = 1;
 	}
 
-	if ((ts_current.tv_sec - chip->vcp_timer.tv_sec) >= UPDATE_VCP_TIME) {
+	if ((ts_current.tv_sec - chip->vcp_timer.tv_sec) >= update_vcp_time) {
 		chip->vcp_timer = ts_current;
 		chip->set_vcp_flag = 1;
 	}
 
-	if ((ts_current.tv_sec - chip->temp_timer.tv_sec) >= UPDATE_TEMP_TIME) {
+	if ((ts_current.tv_sec - chip->temp_timer.tv_sec) >= update_temp_time) {
 		chip->temp_timer = ts_current;
 		chip->set_temp_flag = 1;
 	}
@@ -1118,7 +1119,8 @@ static int oplus_pps_check_temp(struct oplus_pps_chip *chip)
 	}
 
 	if (chip->set_temp_flag) {
-		list_for_each_entry(oplus_temp, &chip->temp_list, temp_list) {
+
+		list_for_each_entry (oplus_temp, &chip->temp_list, temp_list) {
 			ret = oplus_temp->get_temp(oplus_temp->dev);
 
 			if (ret >= 85)
@@ -1185,6 +1187,8 @@ static void oplus_pps_status_check(struct oplus_pps_chip *chip)
 	r1 = ((chip->charger_output_volt * 100 - 204 * chip->vcpout_volt)
 	      / chip->charger_output_current) / 100;
 
+	//vol_limit1 = (R1_LIMIT * chip->charger_output_current) + (206 * chip->vcpout_volt / 100);
+
 	if (r1 > R1_LIMIT) {
 		chip->r1_over_count++;
 		if (chip->r1_over_count > 10) {
@@ -1194,6 +1198,7 @@ static void oplus_pps_status_check(struct oplus_pps_chip *chip)
 		chip->r1_over_count = 0;
 	}
 
+	//vol_limit2 = (R2_LIMIT * chip->ap_batt_current) + chip->ap_batt_volt;
 	r2 = (chip->vcpout_volt - chip->ap_batt_volt * 2)
 	     / (-chip->ap_batt_current);
 	if (r2 > R2_LIMIT) {
@@ -1211,6 +1216,7 @@ static void oplus_pps_status_check(struct oplus_pps_chip *chip)
 	if (i_curr > CABLE_CURRENT_LIMIT) {
 		chip->cable_over_count++;
 		if (chip->cable_over_count > 10) {
+			//chip->fg_cable_over = 1;
 		}
 	} else {
 		chip->cable_over_count = 0;
@@ -1251,6 +1257,7 @@ static void oplus_pps_status_check(struct oplus_pps_chip *chip)
 			oplus_pps_stop();
 		}
 	}
+
 }
 
 static int oplus_pps_get_vcp(struct oplus_pps_chip *chip)
@@ -1263,6 +1270,7 @@ static int oplus_pps_get_vcp(struct oplus_pps_chip *chip)
 	}
 
 	if (chip->set_vcp_flag) {
+
 		ret = chip->ops->get_vbat0_volt();
 		if (ret < 0)
 			return -EINVAL;
@@ -1276,6 +1284,7 @@ static int oplus_pps_action(struct oplus_pps_chip *chip)
 {
 	int update_size = 0;
 	static int curr_increase_cnt = 0;
+	//static int curr_decrease_cnt = 0;
 	static int curr_over_target_cnt = 0;
 	int ret;
 
@@ -1452,10 +1461,10 @@ static int oplus_pps_action(struct oplus_pps_chip *chip)
 
 		oplus_pps_get_cool_down_curr(chip);
 		oplus_pps_get_batt_temp_curr(chip, chip->ap_batt_temperature);
-
+		
 		chip->target_charger_volt = oplus_pps_get_curve_vbus(chip);
 		chip->target_charger_current = oplus_pps_get_target_current(chip);
-
+		
 		if ((chip->ap_input_current - chip->target_charger_current) > 1000
 				|| (chip->target_charger_current - chip->ap_input_current) > 1000) {
 			update_size = 250;
@@ -1489,7 +1498,7 @@ static int oplus_pps_action(struct oplus_pps_chip *chip)
 
 		oplus_pps_get_cool_down_curr(chip);
 		oplus_pps_get_batt_temp_curr(chip, chip->ap_batt_temperature);
-
+		
 		chip->target_charger_volt = oplus_pps_get_curve_vbus(chip);
 		chip->target_charger_current = oplus_pps_get_target_current(chip);
 
@@ -1510,7 +1519,7 @@ static int oplus_pps_action(struct oplus_pps_chip *chip)
 			} else {
 				curr_over_target_cnt = 0;
 			}
-
+			
 			if (chip->target_charger_current < chip->target_charger_current_pre
 					|| curr_over_target_cnt > 3) {
 				chip->pps_status = OPLUS_PPS_STATUS_CUR_DECREASE;
@@ -1530,7 +1539,7 @@ static int oplus_pps_action(struct oplus_pps_chip *chip)
 	}
 	chg_err("pps_status = %d, target_volt: %d, target_current = %d, ask_charger_volt: %d, ask_charger_current: %d, ap_input_volt = %d\n",
 			chip->pps_status, chip->target_charger_volt, chip->target_charger_current,
-			chip->ask_charger_volt, chip->ask_charger_current, chip->ap_input_volt);
+			chip->ask_charger_volt, chip->ask_charger_current,chip->ap_input_volt);
 
 	return 0;
 }
@@ -1594,6 +1603,25 @@ EXPORT_SYMBOL(oplus_pps_stop);
 static int oplus_pps_psy_changed(struct notifier_block *nb, unsigned long evt,
                            void *ptr)
 {
+#if 0
+	struct oplus_pps_chip *chip = &g_pps_chip;
+	union power_supply_propval val;
+
+	int ret;
+
+	ret = power_supply_get_property(chip->pps_usb_psy,
+	                                POWER_SUPPLY_PROP_PD_ACTIVE, &val);
+	if (ret) {
+		chg_err("Unable to read PD MODE: %d\n", ret);
+		return ret;
+	}
+
+	if (val.intval != POWER_SUPPLY_PD_PPS_ACTIVE) {
+		if (oplus_pps_get_chg_status() == PPS_CHARGERING)
+			schedule_delayed_work(&chip->pps_stop_work, 0);
+	}
+#endif
+
 	return 0;
 }
 
@@ -1753,8 +1781,8 @@ bool oplus_pps_check_by_thermal(void)
 
 	chip->ap_batt_temperature = oplus_chg_match_temp_for_chging();
 
-	if ((chip->ap_batt_temperature < (chip->pps_batt_over_high_temp - TEMP_DELTAT))
-			&& (chip->ap_batt_temperature > (chip->pps_batt_over_low_temp + TEMP_DELTAT))
+	if (chip->ap_batt_temperature < chip->pps_batt_over_high_temp - TEMP_DELTAT
+			&& chip->ap_batt_temperature > chip->pps_batt_over_low_temp + TEMP_DELTAT
 			&& chip->ops->check_btb_temp() >= 0) {
 		return true;
 	}
@@ -1811,7 +1839,6 @@ void oplus_pps_variables_reset(void)
 int oplus_pps_register_ops(struct oplus_pps_mcu_operations *ops)
 {
 	struct oplus_pps_chip *chip = &g_pps_chip;
-
 	if (!chip) {
 		pr_err("%s, g_pps_chip null!\n", __func__);
 		return -EINVAL;
@@ -1840,6 +1867,8 @@ int oplus_pps_init(struct oplus_chg_chip *g_chg_chip)
 	if (!usb_psy) {
 		dev_err(chip->dev, "USB psy not found; deferring probe\n");
 		return -EPROBE_DEFER;
+		//ret = -EPROBE_DEFER;
+		//goto power_psy_reg_failed;
 	}
 
 	chip->pps_usb_psy = usb_psy;

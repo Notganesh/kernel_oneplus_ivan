@@ -1,9 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
-#include <linux/version.h>
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
@@ -17,9 +11,7 @@
 #include <linux/kobject.h>
 #include <linux/platform_device.h>
 #include <asm/atomic.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 #include <linux/xlog.h>
-#endif
 //#include <upmu_common.h>
 #include <linux/gpio.h>
 //#include <linux/irqchip/mtk-eic.h>
@@ -57,36 +49,6 @@
 int g_hw_version = 0;
 int mcu_ctrl_cp_status = -1;
 struct oplus_vooc_chip *pps_chip;
-static const char * const strategy_soc[] = {
-	[BCC_BATT_SOC_0_TO_50]	= "strategy_soc_0_to_50",
-	[BCC_BATT_SOC_50_TO_75]	= "strategy_soc_50_to_75",
-	[BCC_BATT_SOC_75_TO_85]	= "strategy_soc_75_to_85",
-	[BCC_BATT_SOC_85_TO_90]	= "strategy_soc_85_to_90",
-};
-
-static const char * const strategy_temp[] = {
-	[BATT_BCC_CURVE_TEMP_LITTLE_COLD]	= "strategy_temp_little_cold",/*0-5*/
-	[BATT_BCC_CURVE_TEMP_COOL]			= "strategy_temp_cool", /*5-12*/
-	[BATT_BCC_CURVE_TEMP_LITTLE_COOL]	= "strategy_temp_little_cool", /*12-20*/
-	[BATT_BCC_CURVE_TEMP_NORMAL_LOW]	= "strategy_temp_normal_low", /*20-35*/
-	[BATT_BCC_CURVE_TEMP_NORMAL_HIGH] 	= "strategy_temp_normal_high", /*35-44*/
-	[BATT_BCC_CURVE_TEMP_WARM] 			= "strategy_temp_warm", /*44-53*/
-};
-
-/*svooc curv*/
-/*0~50*/
-struct batt_bcc_curves bcc_curves_soc0_2_50[BATT_BCC_ROW_MAX] = {0};
-/*50~75*/
-struct batt_bcc_curves bcc_curves_soc50_2_75[BATT_BCC_ROW_MAX] = {0};
-/*75~85*/
-struct batt_bcc_curves bcc_curves_soc75_2_85[BATT_BCC_ROW_MAX] = {0};
-/*85~90*/
-struct batt_bcc_curves bcc_curves_soc85_2_90[BATT_BCC_ROW_MAX] = {0};
-
-struct batt_bcc_curves svooc_curves_target_soc_curve[BATT_BCC_ROW_MAX] = {0};
-
-struct batt_bcc_curves svooc_curves_target_curve[1] = {0};
-
 void oplus_vooc_data_irq_init(struct oplus_vooc_chip *chip);
 
 void init_hw_version(void)
@@ -122,195 +84,6 @@ int get_vooc_mcu_type(struct oplus_vooc_chip *chip)
 		return mcu_hwid_type;
 	}
 	return oplus_vooc_mcu_hwid_check(chip);
-}
-
-int oplus_mcu_bcc_svooc_batt_curves(struct oplus_vooc_chip *chip)
-{
-	struct device_node *node, *svooc_node, *soc_node;
-	int rc = 0, i, j, length;
-
-	node = chip->dev->of_node;
-
-	svooc_node = of_get_child_by_name(node, "svooc_charge_curve");
-	if (!svooc_node) {
-		chg_err("Can not find svooc_charge_strategy node\n");
-		return -EINVAL;
-	}
-
-	for (i = 0; i < BCC_BATT_SOC_90_TO_100; i++) {
-		soc_node = of_get_child_by_name(svooc_node, strategy_soc[i]);
-		if (!soc_node) {
-			chg_err("Can not find %s node\n", strategy_soc[i]);
-			return -EINVAL;
-		}
-
-		for (j = 0; j < BATT_BCC_CURVE_MAX; j++) {
-			rc = of_property_count_elems_of_size(soc_node, strategy_temp[j], sizeof(u32));
-			if (rc < 0) {
-				if (j == BATT_BCC_CURVE_TEMP_WARM) {
-					continue;
-				} else {
-					chg_err("Count %s failed, rc=%d\n", strategy_temp[j], rc);
-					return rc;
-				}
-			}
-
-			length = rc;
-
-			switch(i) {
-			case BCC_BATT_SOC_0_TO_50:
-				rc = of_property_read_u32_array(soc_node, strategy_temp[j],
-									(u32 *)bcc_curves_soc0_2_50[j].batt_bcc_curve,
-									length);
-				bcc_curves_soc0_2_50[j].bcc_curv_num = length/4;
-				break;
-			case BCC_BATT_SOC_50_TO_75:
-				rc = of_property_read_u32_array(soc_node, strategy_temp[j],
-									(u32 *)bcc_curves_soc50_2_75[j].batt_bcc_curve,
-									length);
-				bcc_curves_soc50_2_75[j].bcc_curv_num = length/4;
-				break;
-			case BCC_BATT_SOC_75_TO_85:
-				rc = of_property_read_u32_array(soc_node, strategy_temp[j],
-									(u32 *)bcc_curves_soc75_2_85[j].batt_bcc_curve,
-									length);
-				bcc_curves_soc75_2_85[j].bcc_curv_num = length/4;
-				break;
-			case BCC_BATT_SOC_85_TO_90:
-				rc = of_property_read_u32_array(soc_node, strategy_temp[j],
-									(u32 *)bcc_curves_soc85_2_90[j].batt_bcc_curve,
-									length);
-				bcc_curves_soc85_2_90[j].bcc_curv_num = length/4;
-				break;
-			default:
-				break;
-			}
-		}
-	}
-
-	return rc;
-}
-
-int oplus_mcu_bcc_stop_curr_dt(struct oplus_vooc_chip *chip)
-{
-	struct device_node *node = chip->dev->of_node;
-	int rc;
-
-	if (!node) {
-		dev_err(chip->dev, "device tree info. missing\n");
-		return -EINVAL;
-	}
-
-	/* add for bcc get stop current soc is 0-50 */
-	rc = of_property_read_u32(node, "qcom,svooc_0_to_50_little_cold_stop_cur", &chip->svooc_0_to_50_little_cold_stop_cur);
-	if (rc) {
-		chip->svooc_0_to_50_little_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_0_to_50_cold_stop_cur", &chip->svooc_0_to_50_cold_stop_cur);
-	if (rc) {
-		chip->svooc_0_to_50_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_0_to_50_little_cool_stop_cur", &chip->svooc_0_to_50_little_cool_stop_cur);
-	if (rc) {
-		chip->svooc_0_to_50_little_cool_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_0_to_50_normal_low_stop_cur", &chip->svooc_0_to_50_normal_low_stop_cur);
-	if (rc) {
-		chip->svooc_0_to_50_normal_low_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_0_to_50_normal_high_stop_cur", &chip->svooc_0_to_50_normal_high_stop_cur);
-	if (rc) {
-		chip->svooc_0_to_50_normal_high_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_0_to_50_warm_stop_cur", &chip->svooc_0_to_50_warm_stop_cur);
-	if (rc) {
-		chip->svooc_0_to_50_warm_stop_cur = 0;
-	}
-
-	/* add for bcc get stop current soc is 51-75 */
-	rc = of_property_read_u32(node, "qcom,svooc_51_to_75_little_cold_stop_cur", &chip->svooc_51_to_75_little_cold_stop_cur);
-	if (rc) {
-		chip->svooc_51_to_75_little_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_51_to_75_cold_stop_cur", &chip->svooc_51_to_75_cold_stop_cur);
-	if (rc) {
-		chip->svooc_51_to_75_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_51_to_75_little_cool_stop_cur", &chip->svooc_51_to_75_little_cool_stop_cur);
-	if (rc) {
-		chip->svooc_51_to_75_little_cool_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_51_to_75_normal_low_stop_cur", &chip->svooc_51_to_75_normal_low_stop_cur);
-	if (rc) {
-		chip->svooc_51_to_75_normal_low_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_51_to_75_normal_high_stop_cur", &chip->svooc_51_to_75_normal_high_stop_cur);
-	if (rc) {
-		chip->svooc_51_to_75_normal_high_stop_cur = 0;
-	}
-
-	/* add for bcc get stop current soc is 76-85 */
-	rc = of_property_read_u32(node, "qcom,svooc_76_to_85_little_cold_stop_cur", &chip->svooc_76_to_85_little_cold_stop_cur);
-	if (rc) {
-		chip->svooc_76_to_85_little_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_76_to_85_cold_stop_cur", &chip->svooc_76_to_85_cold_stop_cur);
-	if (rc) {
-		chip->svooc_76_to_85_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_76_to_85_little_cool_stop_cur", &chip->svooc_76_to_85_little_cool_stop_cur);
-	if (rc) {
-		chip->svooc_76_to_85_little_cool_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_76_to_85_normal_low_stop_cur", &chip->svooc_76_to_85_normal_low_stop_cur);
-	if (rc) {
-		chip->svooc_76_to_85_normal_low_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_76_to_85_normal_high_stop_cur", &chip->svooc_76_to_85_normal_high_stop_cur);
-	if (rc) {
-		chip->svooc_76_to_85_normal_high_stop_cur = 0;
-	}
-
-	/* add for bcc get stop current soc is 86-90 */
-	rc = of_property_read_u32(node, "qcom,svooc_86_to_90_little_cold_stop_cur", &chip->svooc_86_to_90_little_cold_stop_cur);
-	if (rc) {
-		chip->svooc_86_to_90_little_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_86_to_90_cold_stop_cur", &chip->svooc_86_to_90_cold_stop_cur);
-	if (rc) {
-		chip->svooc_86_to_90_cold_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_86_to_90_little_cool_stop_cur", &chip->svooc_86_to_90_little_cool_stop_cur);
-	if (rc) {
-		chip->svooc_86_to_90_little_cool_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_86_to_90_normal_low_stop_cur", &chip->svooc_86_to_90_normal_low_stop_cur);
-	if (rc) {
-		chip->svooc_86_to_90_normal_low_stop_cur = 0;
-	}
-
-	rc = of_property_read_u32(node, "qcom,svooc_86_to_90_normal_high_stop_cur", &chip->svooc_86_to_90_normal_high_stop_cur);
-	if (rc) {
-		chip->svooc_86_to_90_normal_high_stop_cur = 0;
-	}
-
-	return rc;
 }
 
 static int opchg_bq27541_gpio_pinctrl_init(struct oplus_vooc_chip *chip)
@@ -451,9 +224,6 @@ void oplus_vooc_fw_type_dt(struct oplus_vooc_chip *chip)
 		return ;
 	}
 
-	chip->smart_chg_bcc_support = of_property_read_bool(node, "qcom,smart_chg_bcc_support");
-	chg_err("qcom,smart_chg_bcc_support is %d\n", chip->smart_chg_bcc_support);
-
 	chip->vooc_current_lvl_cnt = of_property_count_elems_of_size(node,
 				"qcom,vooc_current_lvl", sizeof(*chip->vooc_current_lvl));
 	if (chip->vooc_current_lvl_cnt > 0) {
@@ -482,7 +252,6 @@ void oplus_vooc_fw_type_dt(struct oplus_vooc_chip *chip)
 #ifdef OPLUS_CUSTOM_OP_DEF
 	chip->hiz_gnd_cable = of_property_read_bool(node, "qcom,supported_hiz_gnd_cable");
 #endif
-	chip->support_high_watt_svooc = of_property_read_bool(node, "qcom,support_high_watt_svooc");
 	rc = of_property_read_u32(node, "qcom,vooc-fw-type", &chip->vooc_fw_type);
 	if (rc) {
 		chip->vooc_fw_type = VOOC_FW_TYPE_INVALID;
@@ -682,15 +451,6 @@ void oplus_vooc_fw_type_dt(struct oplus_vooc_chip *chip)
 	} else {
 		chg_debug("qcom,vooc_reply_mcu_bits is %d\n",
 			chip->vooc_reply_mcu_bits);
-	}
-
-	rc = of_property_read_u32(node, "qcom,support_fake_vooc_check",
-				&chip->support_fake_vooc_check);
-	if(rc) {
-		chip->support_fake_vooc_check = 1;
-	} else {
-		chg_debug("is not support fake vooc check\n");
-		chip->support_fake_vooc_check = 0;
 	}
 
 	rc = of_property_read_u32(node, "qcom,support_fake_vooc_check",
@@ -1081,7 +841,6 @@ int oplus_vooc_mcu_hwid_check(struct oplus_vooc_chip *chip)
 	int rc;
 	static int mcu_hwid_type = -1;
 	struct device_node *node = NULL;
-	bool old_project_disable_hwid_check = false;
 
 /*This is only for P60 P(17197 P)*/
 #ifdef CONFIG_OPLUS_CHARGER_MTK6771
@@ -1104,16 +863,9 @@ int oplus_vooc_mcu_hwid_check(struct oplus_vooc_chip *chip)
 	chip->vooc_gpio.vooc_mcu_id_gpio = of_get_named_gpio(node,
 		"qcom,vooc_mcu_id-gpio", 0);
 	if (chip->vooc_gpio.vooc_mcu_id_gpio < 0) {
-		old_project_disable_hwid_check = of_property_read_bool(node, "old_project_disable_hwid_check");
-		if (old_project_disable_hwid_check == true) {
-			chg_err("old_project_disable_hwid_check!\n");
-			mcu_hwid_type = OPLUS_VOOC_ASIC_HWID_RK826;
-			return OPLUS_VOOC_ASIC_HWID_RK826;
-		} else {
-			chg_err("chip->vooc_gpio.vooc_mcu_id_gpio not specified, enable stm8s\n");
-			mcu_hwid_type = OPLUS_VOOC_MCU_HWID_STM8S;
-			return OPLUS_VOOC_MCU_HWID_STM8S;
-		}
+		chg_err("chip->vooc_gpio.vooc_mcu_id_gpio not specified, enable stm8s\n");
+		mcu_hwid_type = OPLUS_VOOC_MCU_HWID_STM8S;
+		return OPLUS_VOOC_MCU_HWID_STM8S;
 	} else {
 		if (gpio_is_valid(chip->vooc_gpio.vooc_mcu_id_gpio)) {
 			rc = gpio_request(chip->vooc_gpio.vooc_mcu_id_gpio, "vooc-mcu-id-gpio");
@@ -1528,7 +1280,7 @@ bool is_allow_fast_chg_real(struct oplus_vooc_chip *chip)
 
 	if (chip->vooc_normal_high_temp != -EINVAL
 		&& (temp > chip->vooc_normal_high_temp)
-		&& ( !(soc < chip->vooc_warm_allow_soc
+		&& (!(soc < chip->vooc_warm_allow_soc
 		&& (oplus_chg_get_batt_volt() < chip->vooc_warm_allow_vol)))) {
 		return false;
 	}
@@ -2081,343 +1833,5 @@ int oplus_pps_get_gpio_value(struct oplus_vooc_chip *chip)
 
 	level = gpio_get_value(chip->vooc_gpio.mcu_ctrl_cp_gpio);
 	return level;
-}
-
-int oplus_vooc_choose_bcc_fastchg_curve(struct oplus_vooc_chip *chip)
-{
-	int batt_soc_plugin = FAST_SOC_0_TO_50;
-	int batt_temp_plugin = FAST_TEMP_200_TO_350;
-	int idx;
-	int i;
-
-	if (chip == NULL) {
-		chg_err("vooc chip is NULL,return!\n");
-		return -EINVAL;
-	}
-
-	if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_LITTLE_COLD) {
-		batt_temp_plugin = FAST_TEMP_0_TO_50;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_COOL) {
-		batt_temp_plugin = FAST_TEMP_50_TO_120;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_LITTLE_COOL) {
-		batt_temp_plugin = FAST_TEMP_120_TO_200;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_NORMAL_LOW) {
-		batt_temp_plugin = FAST_TEMP_200_TO_350;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_NORMAL_HIGH) {
-		batt_temp_plugin = FAST_TEMP_350_TO_430;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_WARM) {
-		batt_temp_plugin = FAST_TEMP_430_TO_530;
-	} else {
-		batt_temp_plugin = FAST_TEMP_200_TO_350;
-	}
-
-	if (chip->bcc_soc_range == 0) {
-		batt_soc_plugin = FAST_SOC_0_TO_50;
-	} else if (chip->bcc_soc_range == 1) {
-		batt_soc_plugin = FAST_SOC_50_TO_75;
-	} else if (chip->bcc_soc_range == 2) {
-		batt_soc_plugin = FAST_SOC_75_TO_85;
-	} else if (chip->bcc_soc_range == 3) {
-		batt_soc_plugin = FAST_SOC_85_TO_90;
-	}
-
-	if (batt_soc_plugin == FAST_SOC_0_TO_50) {
-		chg_err("soc is 0~50!\n");
-		for (i = 0; i < BATT_BCC_ROW_MAX; i++) {
-			svooc_curves_target_soc_curve[i].bcc_curv_num = bcc_curves_soc0_2_50[i].bcc_curv_num;
-			memcpy((&svooc_curves_target_soc_curve[i])->batt_bcc_curve,
-				(&bcc_curves_soc0_2_50[i])->batt_bcc_curve,
-				sizeof(struct batt_bcc_curve) * (bcc_curves_soc0_2_50[i].bcc_curv_num));
-		}
-	} else if (batt_soc_plugin == FAST_SOC_50_TO_75) {
-		chg_err("soc is 50~75!\n");
-		for (i = 0; i < BATT_BCC_ROW_MAX; i++) {
-			svooc_curves_target_soc_curve[i].bcc_curv_num = bcc_curves_soc50_2_75[i].bcc_curv_num;
-			memcpy((&svooc_curves_target_soc_curve[i])->batt_bcc_curve,
-				(&bcc_curves_soc50_2_75[i])->batt_bcc_curve,
-				sizeof(struct batt_bcc_curve) * (bcc_curves_soc50_2_75[i].bcc_curv_num));
-		}
-	} else if (batt_soc_plugin == FAST_SOC_75_TO_85) {
-		chg_err("soc is 75~85!\n");
-		for (i = 0; i < BATT_BCC_ROW_MAX; i++) {
-			svooc_curves_target_soc_curve[i].bcc_curv_num = bcc_curves_soc75_2_85[i].bcc_curv_num;
-			memcpy((&svooc_curves_target_soc_curve[i])->batt_bcc_curve,
-				(&bcc_curves_soc75_2_85[i])->batt_bcc_curve,
-				sizeof(struct batt_bcc_curve) * (bcc_curves_soc75_2_85[i].bcc_curv_num));
-		}
-	} else if (batt_soc_plugin == FAST_SOC_85_TO_90) {
-		chg_err("soc is 85~90!\n");
-		for (i = 0; i < BATT_BCC_ROW_MAX; i++) {
-			svooc_curves_target_soc_curve[i].bcc_curv_num = bcc_curves_soc85_2_90[i].bcc_curv_num;
-			memcpy((&svooc_curves_target_soc_curve[i])->batt_bcc_curve,
-				(&bcc_curves_soc85_2_90[i])->batt_bcc_curve,
-				sizeof(struct batt_bcc_curve) * (bcc_curves_soc85_2_90[i].bcc_curv_num));
-		}
-	}
-
-	switch(batt_temp_plugin) {
-	case FAST_TEMP_0_TO_50:
-		chg_err("bcc get curve, temp is 0-5!\n");
-		svooc_curves_target_curve[0].bcc_curv_num =
-						svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_LITTLE_COLD].bcc_curv_num;
-		memcpy((&svooc_curves_target_curve[0])->batt_bcc_curve,
-			(&(svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_LITTLE_COLD]))->batt_bcc_curve,
-			sizeof(struct batt_bcc_curve) * (svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_LITTLE_COLD].bcc_curv_num));
-		break;
-	case FAST_TEMP_50_TO_120:
-		chg_err("bcc get curve, temp is 5-12!\n");
-		svooc_curves_target_curve[0].bcc_curv_num =
-						svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_COOL].bcc_curv_num;
-		memcpy((&svooc_curves_target_curve[0])->batt_bcc_curve,
-			(&(svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_COOL]))->batt_bcc_curve,
-			sizeof(struct batt_bcc_curve) * (svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_COOL].bcc_curv_num));
-		break;
-	case FAST_TEMP_120_TO_200:
-		chg_err("bcc get curve, temp is 12-20!\n");
-		svooc_curves_target_curve[0].bcc_curv_num =
-						svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_LITTLE_COOL].bcc_curv_num;
-		memcpy((&svooc_curves_target_curve[0])->batt_bcc_curve,
-			(&(svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_LITTLE_COOL]))->batt_bcc_curve,
-			sizeof(struct batt_bcc_curve) * (svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_LITTLE_COOL].bcc_curv_num));
-		break;
-	case FAST_TEMP_200_TO_350:
-		chg_err("bcc get curve, temp is 20-35!\n");
-		svooc_curves_target_curve[0].bcc_curv_num =
-						svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_NORMAL_LOW].bcc_curv_num;
-		memcpy((&svooc_curves_target_curve[0])->batt_bcc_curve,
-			(&(svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_NORMAL_LOW]))->batt_bcc_curve,
-			sizeof(struct batt_bcc_curve) * (svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_NORMAL_LOW].bcc_curv_num));
-		break;
-	case FAST_TEMP_350_TO_430:
-		chg_err("bcc get curve, temp is 35-43!\n");
-		svooc_curves_target_curve[0].bcc_curv_num =
-						svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_NORMAL_HIGH].bcc_curv_num;
-		memcpy((&svooc_curves_target_curve[0])->batt_bcc_curve,
-			(&(svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_NORMAL_HIGH]))->batt_bcc_curve,
-			sizeof(struct batt_bcc_curve) * (svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_NORMAL_HIGH].bcc_curv_num));
-		break;
-	case FAST_TEMP_430_TO_530:
-		if (batt_soc_plugin == FAST_SOC_0_TO_50) {
-			chg_err("soc is 0-50 bcc get curve, temp is 43-53!\n");
-			svooc_curves_target_curve[0].bcc_curv_num =
-						svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_WARM].bcc_curv_num;
-			memcpy((&svooc_curves_target_curve[0])->batt_bcc_curve,
-				(&(svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_WARM]))->batt_bcc_curve,
-				sizeof(struct batt_bcc_curve) * (svooc_curves_target_soc_curve[BATT_BCC_CURVE_TEMP_WARM].bcc_curv_num));
-		}
-		break;
-	default:
-		break;
-	}
-	for (idx = 0; idx < svooc_curves_target_curve[0].bcc_curv_num; idx++) {
-		chip->bcc_target_vbat = svooc_curves_target_curve[0].batt_bcc_curve[idx].target_volt;
-		chip->bcc_curve_max_current = svooc_curves_target_curve[0].batt_bcc_curve[idx].max_ibus;
-		chip->bcc_curve_min_current = svooc_curves_target_curve[0].batt_bcc_curve[idx].min_ibus;
-		chip->bcc_exit_curve = svooc_curves_target_curve[0].batt_bcc_curve[idx].exit;
-
-		chg_err("bcc para idx:%d, vbat:%d, max_ibus:%d, min_ibus:%d, exit:%d",
-			idx, chip->bcc_target_vbat, chip->bcc_curve_max_current, chip->bcc_curve_min_current, chip->bcc_exit_curve);
-	}
-
-	chip->svooc_batt_curve[0].bcc_curv_num = svooc_curves_target_curve[0].bcc_curv_num;
-	memcpy((&(chip->svooc_batt_curve[0]))->batt_bcc_curve,
-		(&(svooc_curves_target_curve[0]))->batt_bcc_curve,
-		sizeof(struct batt_bcc_curve) * (svooc_curves_target_curve[0].bcc_curv_num));
-
-	for (idx = 0; idx < chip->svooc_batt_curve[0].bcc_curv_num; idx++) {
-		chg_err("chip svooc bcc para idx:%d vbat:%d, max_ibus:%d, min_ibus:%d, exit:%d curve num:%d\n",
-				idx,
-				chip->svooc_batt_curve[0].batt_bcc_curve[idx].target_volt,
-				chip->svooc_batt_curve[0].batt_bcc_curve[idx].max_ibus,
-				chip->svooc_batt_curve[0].batt_bcc_curve[idx].min_ibus,
-				chip->svooc_batt_curve[0].batt_bcc_curve[idx].exit,
-				chip->svooc_batt_curve[0].bcc_curv_num);
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(oplus_vooc_choose_bcc_fastchg_curve);
-
-int oplus_chg_bcc_get_stop_curr(struct oplus_vooc_chip *chip)
-{
-	int batt_soc_plugin = FAST_SOC_0_TO_50;
-	int batt_temp_plugin = FAST_TEMP_200_TO_350;
-	int svooc_stop_curr = 1000;
-
-	if (chip == NULL) {
-		chg_err("vooc chip is NULL,return!\n");
-		return 1000;
-	}
-
-	if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_LITTLE_COLD) {
-		batt_temp_plugin = FAST_TEMP_0_TO_50;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_COOL) {
-		batt_temp_plugin = FAST_TEMP_50_TO_120;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_LITTLE_COOL) {
-		batt_temp_plugin = FAST_TEMP_120_TO_200;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_NORMAL_LOW) {
-		batt_temp_plugin = FAST_TEMP_200_TO_350;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_NORMAL_HIGH) {
-		batt_temp_plugin = FAST_TEMP_350_TO_430;
-	} else if (chip->bcc_temp_range == FASTCHG_TEMP_RANGE_WARM) {
-		batt_temp_plugin = FAST_TEMP_430_TO_530;
-	} else {
-		batt_temp_plugin = FAST_TEMP_200_TO_350;
-	}
-
-	if (chip->bcc_soc_range == 0) {
-		batt_soc_plugin = FAST_SOC_0_TO_50;
-	} else if (chip->bcc_soc_range == 1) {
-		batt_soc_plugin = FAST_SOC_50_TO_75;
-	} else if (chip->bcc_soc_range == 2) {
-		batt_soc_plugin = FAST_SOC_75_TO_85;
-	} else if (chip->bcc_soc_range == 3) {
-		batt_soc_plugin = FAST_SOC_85_TO_90;
-	}
-
-	if (batt_soc_plugin == FAST_SOC_0_TO_50) {
-		chg_err("get stop curr, enter soc is 0-50\n");
-		switch(batt_temp_plugin) {
-		case FAST_TEMP_0_TO_50:
-			chg_err("bcc get stop curr, temp is 0-5!\n");
-			svooc_stop_curr = chip->svooc_0_to_50_little_cold_stop_cur;
-			break;
-		case FAST_TEMP_50_TO_120:
-			chg_err("bcc get stop curr, temp is 5-12!\n");
-			svooc_stop_curr = chip->svooc_0_to_50_cold_stop_cur;
-			break;
-		case FAST_TEMP_120_TO_200:
-			chg_err("bcc get stop curr, temp is 12-20!\n");
-			svooc_stop_curr = chip->svooc_0_to_50_little_cool_stop_cur;
-			break;
-		case FAST_TEMP_200_TO_350:
-			chg_err("bcc get stop curr, temp is 20-35!\n");
-			svooc_stop_curr = chip->svooc_0_to_50_normal_low_stop_cur;
-			break;
-		case FAST_TEMP_350_TO_430:
-			chg_err("bcc get stop curr, temp is 35-43!\n");
-			svooc_stop_curr = chip->svooc_0_to_50_normal_high_stop_cur;
-			break;
-		case FAST_TEMP_430_TO_530:
-			chg_err("bcc get stop curr, temp is 43-53!\n");
-			svooc_stop_curr = chip->svooc_0_to_50_warm_stop_cur;
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (batt_soc_plugin == FAST_SOC_50_TO_75) {
-		chg_err("get stop curr, enter soc is 50-75\n");
-		switch(batt_temp_plugin) {
-		case FAST_TEMP_0_TO_50:
-			chg_err("bcc get stop curr, temp is 0-5!\n");
-			svooc_stop_curr = chip->svooc_51_to_75_little_cold_stop_cur;
-			break;
-		case FAST_TEMP_50_TO_120:
-			chg_err("bcc get stop curr, temp is 5-12!\n");
-			svooc_stop_curr = chip->svooc_51_to_75_cold_stop_cur;
-			break;
-		case FAST_TEMP_120_TO_200:
-			chg_err("bcc get stop curr, temp is 12-20!\n");
-			svooc_stop_curr = chip->svooc_51_to_75_little_cool_stop_cur;
-			break;
-		case FAST_TEMP_200_TO_350:
-			chg_err("bcc get stop curr, temp is 20-35!\n");
-			svooc_stop_curr = chip->svooc_51_to_75_normal_low_stop_cur;
-			break;
-		case FAST_TEMP_350_TO_430:
-			chg_err("bcc get stop curr, temp is 35-43!\n");
-			svooc_stop_curr = chip->svooc_51_to_75_normal_high_stop_cur;
-			break;
-		case FAST_TEMP_430_TO_530:
-			chg_err("bcc get stop curr, temp is 43-53!\n");
-			svooc_stop_curr = chip->svooc_51_to_75_normal_high_stop_cur;
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (batt_soc_plugin == FAST_SOC_75_TO_85) {
-		chg_err("get stop curr, enter soc is 75-85\n");
-		switch(batt_temp_plugin) {
-		case FAST_TEMP_0_TO_50:
-			chg_err("bcc get stop curr, temp is 0-5!\n");
-			svooc_stop_curr = chip->svooc_76_to_85_little_cold_stop_cur;
-			break;
-		case FAST_TEMP_50_TO_120:
-			chg_err("bcc get stop curr, temp is 5-12!\n");
-			svooc_stop_curr = chip->svooc_76_to_85_cold_stop_cur;
-			break;
-		case FAST_TEMP_120_TO_200:
-			chg_err("bcc get stop curr, temp is 12-20!\n");
-			svooc_stop_curr = chip->svooc_76_to_85_little_cool_stop_cur;
-			break;
-		case FAST_TEMP_200_TO_350:
-			chg_err("bcc get stop curr, temp is 20-35!\n");
-			svooc_stop_curr = chip->svooc_76_to_85_normal_low_stop_cur;
-			break;
-		case FAST_TEMP_350_TO_430:
-			chg_err("bcc get stop curr, temp is 35-43!\n");
-			svooc_stop_curr = chip->svooc_76_to_85_normal_high_stop_cur;
-			break;
-		case FAST_TEMP_430_TO_530:
-			chg_err("bcc get stop curr, temp is 43-53!\n");
-			svooc_stop_curr = chip->svooc_76_to_85_normal_high_stop_cur;
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (batt_soc_plugin == FAST_SOC_85_TO_90) {
-		chg_err("get stop curr, enter soc is 85-90\n");
-		switch(batt_temp_plugin) {
-		case FAST_TEMP_0_TO_50:
-			chg_err("bcc get stop curr, temp is 0-5!\n");
-			svooc_stop_curr = chip->svooc_86_to_90_little_cold_stop_cur;
-			break;
-		case FAST_TEMP_50_TO_120:
-			chg_err("bcc get stop curr, temp is 5-12!\n");
-			svooc_stop_curr = chip->svooc_86_to_90_cold_stop_cur;
-			break;
-		case FAST_TEMP_120_TO_200:
-			chg_err("bcc get stop curr, temp is 12-20!\n");
-			svooc_stop_curr = chip->svooc_86_to_90_little_cool_stop_cur;
-			break;
-		case FAST_TEMP_200_TO_350:
-			chg_err("bcc get stop curr, temp is 20-35!\n");
-			svooc_stop_curr = chip->svooc_86_to_90_normal_low_stop_cur;
-			break;
-		case FAST_TEMP_350_TO_430:
-			chg_err("bcc get stop curr, temp is 35-43!\n");
-			svooc_stop_curr = chip->svooc_86_to_90_normal_high_stop_cur;
-			break;
-		case FAST_TEMP_430_TO_530:
-			chg_err("bcc get stop curr, temp is 43-53!\n");
-			svooc_stop_curr = chip->svooc_86_to_90_normal_high_stop_cur;
-			break;
-		default:
-			break;
-		}
-	}
-
-	chg_err("get stop curr is %d!\n", svooc_stop_curr);
-
-	return svooc_stop_curr;
-}
-EXPORT_SYMBOL(oplus_chg_bcc_get_stop_curr);
-
-void oplus_vooc_bcc_curves_init(struct oplus_vooc_chip *chip)
-{
-	if (!chip) {
-		return;
-	}
-
-	if (oplus_vooc_get_bcc_support()) {
-		oplus_mcu_bcc_svooc_batt_curves(chip);
-		oplus_mcu_bcc_stop_curr_dt(chip);
-	}
 }
 

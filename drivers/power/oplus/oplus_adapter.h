@@ -1,10 +1,5 @@
-/* SPDX-License-Identifier: GPL-2.0-only  */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
-//#ifndef _OPLUS_ADAPTER_H_
-//#define _OPLUS_ADAPTER_H_
+/* #ifndef _OPLUS_ADAPTER_H_ */
+/* #define _OPLUS_ADAPTER_H_ */
 
 #include <linux/workqueue.h>
 #include <linux/version.h>

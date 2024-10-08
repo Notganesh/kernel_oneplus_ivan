@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
+
 #include <linux/delay.h>
 #include <linux/power_supply.h>
 #include <linux/proc_fs.h>
@@ -108,17 +105,6 @@ ssize_t __attribute__((weak)) vfs_read(struct file *file, char __user *buf, size
 ssize_t __attribute__((weak)) vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	return -EINVAL;
-}
-
-/*kernel-5.10 GKI2.0 NOT allow drivers to use filp_open...*/
-struct file* __attribute__((weak)) filp_open(const char *filename, int flags, umode_t mode)
-{
-	return ERR_PTR(-EINVAL);
-}
-
-int  __attribute__((weak)) filp_close(struct file *filp, fl_owner_t id)
-{
-	return 0;
 }
 #endif
 

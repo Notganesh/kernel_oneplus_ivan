@@ -1,14 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2020-2022 Oplus. All rights reserved.
- */
-
 #ifndef __OPLUS_DEBUG_INFO__H
 #define __OPLUS_DEBUG_INFO__H
 
 #include "oplus_charger.h"
-
-#define BCC_LINE_LENGTH_MAX 1024
 
 enum oplus_chg_debug_info_notify_type {
 	OPLUS_CHG_DEBUG_NOTIFY_TYPE_SOC_JUMP,
@@ -18,7 +11,6 @@ enum oplus_chg_debug_info_notify_type {
 	OPLUS_CHG_DEBUG_NOTIFY_TYPE_GAUGE_ERROR,
 	OPLUS_CHG_DEBUG_NOTIFY_TYPE_WIRELESS,/*add for wireless chg*/
 	OPLUS_CHG_DEBUG_NOTIFY_TYPE_RECHG,/*add for rechg counts*/
-	OPLUS_CHG_DEBUG_NOTIFY_TYPE_BCC_ERR,
 	OPLUS_CHG_DEBUG_NOTIFY_TYPE_MAX,
 };
 
@@ -44,8 +36,7 @@ enum oplus_chg_debug_info_notify_flag {
 	OPLUS_NOTIFY_GAUGE_UNSEAL_FAIL,
 	OPLUS_NOTIFY_CHG_UNSUSPEND,/*add for unsuspend platPmic*/
 	OPLUS_NOTIFY_VOOCPHY_ERR,/*add for voocPhy chg*/
-	OPLUS_NOTIFY_MCU_UPDATE_FAIL,
-	OPLUS_NOTIFY_SC8547_ERROR, /* ic end */
+	OPLUS_NOTIFY_MCU_UPDATE_FAIL, //ic end
 	OPLUS_NOTIFY_CHG_BATT_RECHG,/*add for rechg counts*/
 	OPLUS_NOTIFY_BATT_AGING_CAP,
 	OPLUS_NOTIFY_CHG_VOOC_BREAK,
@@ -57,30 +48,16 @@ enum oplus_chg_debug_info_notify_flag {
 	OPLUS_NOTIFY_WIRELESS_START_CHG,
 	OPLUS_NOTIFY_WIRELESS_WIRELESS_CHG_BREAK,
 	OPLUS_NOTIFY_WIRELESS_WIRELESS_CHG_END,/*add for wireless chg end*/
-	OPLUS_NOTIFY_WIRELESS_START_TX,
-	OPLUS_NOTIFY_WIRELESS_STOP_TX,
-	OPLUS_NOTIFY_BCC_ANODE_POTENTIAL_OVER_TIME,
-	OPLUS_NOTIFY_BCC_CURR_ADJUST_ERR,
 	OPLUS_NOTIFY_PARALLEL_LIMITIC_ERROR, /*add for parallel chg*/
 	OPLUS_NOTIFY_PARALLEL_FULL_NON_100_ERROR, /*add for parallel chg*/
-	OPLUS_NOTIFY_FG_CAN_NOT_UPDATE, /*add for soc do not update issue*/
 	OPLUS_NOTIFY_CHG_MAX_CNT,
 };
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
-enum oplus_power_supply_type {
-	POWER_SUPPLY_TYPE_USB_HVDCP = 13,		/* High Voltage DCP */
-	POWER_SUPPLY_TYPE_USB_HVDCP_3,		/* Efficient High Voltage DCP */
-	POWER_SUPPLY_TYPE_USB_HVDCP_3P5,	/* Efficient High Voltage DCP */
-	POWER_SUPPLY_TYPE_USB_FLOAT,		/* Floating charger */
-};
-#endif
-
-struct wireless_pen_status {
-	bool support;
-	u64 ble_timeout_cnt;
-	u64 verify_failed_cnt;
-};/*add for wireless pen*/
+	struct wireless_pen_status {
+		bool support;
+		u64 ble_timeout_cnt;
+		u64 verify_failed_cnt;
+	};/*add for wireless pen*/
 
 struct wireless_chg_debug_info {
 	int boot_version;
@@ -96,13 +73,7 @@ struct wireless_chg_debug_info {
 	int work_silent_mode;
 	int break_count;
 	int wpc_chg_err;
-	int highest_temp;
-	int max_iout;
-	int min_cool_down;
-	int min_skewing_current;
-	int wls_auth_fail;
 };/*add for wireless chg*/
-
 
 struct oplus_chg_debug_info {
 	int initialized;
@@ -159,8 +130,7 @@ struct oplus_chg_debug_info {
 	int chg_full_notified_flag;
 	int rechg_counts;/*add for rechg counts*/
 	struct workqueue_struct *oplus_chg_debug_wq;
-
-#if defined(CONFIG_OPLUS_FEATURE_FEEDBACK) || defined(CONFIG_OPLUS_FEATURE_FEEDBACK_MODULE)
+#ifdef CONFIG_OPLUS_FEATURE_FEEDBACK
 	struct kernel_packet_info *dcs_info;
 	struct mutex dcs_info_lock;
 #define SEND_INFO_DELAY 3000
@@ -170,18 +140,12 @@ struct oplus_chg_debug_info {
 #endif
 	char flag_reason[32];
 	char type_reason[32];
-	char sc8547_error_reason[32];
-	struct timespec charge_start_ts;
 	int vooc_mcu_error;
 	bool report_soh;
 	int batt_soh;
 	int batt_cc;
 	struct wireless_chg_debug_info wireless_info;/*add for wireless chg*/
 	struct wireless_pen_status wirelesspen_info;/*add for wireless pen*/
-	char bcc_buf[BCC_LINE_LENGTH_MAX];
-	int fg_error_count;
-	bool fg_error_flag;
-	char *fg_info;	/* pointer only use for mtk platform FG */
 };
 
 enum GAUGE_SEAL_UNSEAL_ERROR{
@@ -207,5 +171,4 @@ extern int oplus_switching_get_hw_enable(void);
 extern int oplus_switching_get_charge_enable(void);
 extern int oplus_switching_get_fastcharge_current(void);
 extern int oplus_switching_get_discharge_current(void);
-extern int oplus_chg_bcc_err(const char* buf);
 #endif

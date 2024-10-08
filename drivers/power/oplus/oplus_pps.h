@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 
 #ifndef _OPLUS_PPS_H_
 #define _OPLUS_PPS_H_
@@ -40,10 +36,10 @@
 
 #define BATT_SYS_MAX_PPS                     8
 
-#define  UPDATE_VCP_TIME                      1
-#define  UPDATE_PDO_TIME                     5
-#define  UPDATE_FASTCHG_TIME                 1
-#define  UPDATE_TEMP_TIME                     3
+#define update_vcp_time                      1
+#define update_pdo_time                      5
+#define update_fastchg_time                  1
+#define update_temp_time                     3
 
 enum {
 	PPS_BAT_TEMP_NATURAL = 0,
@@ -67,6 +63,7 @@ enum {
 	OPLUS_PPS_STATUS_START = 0,
 	OPLUS_PPS_STATUS_OPEN_OVP_CP,
 	OPLUS_PPS_STATUS_VOLT_CHANGE,
+	//OPLUS_PPS_STATUS_CUR_CHANGE,
 	OPLUS_PPS_STATUS_CUR_INCREASE,
 	OPLUS_PPS_STATUS_CUR_DECREASE,
 	OPLUS_PPS_STATUS_CHECK,
@@ -258,6 +255,7 @@ struct oplus_temp_chip {
 
 int oplus_pps_register_ops(struct oplus_pps_mcu_operations *ops);
 int oplus_pps_init(struct oplus_chg_chip *chip);
+//int pps_get_adapter_type(void);
 void oplus_pps_variables_reset(void);
 int oplus_pps_get_chg_status(void);
 int oplus_pps_set_chg_status(int status);

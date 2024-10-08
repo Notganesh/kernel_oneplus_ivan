@@ -1,8 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 . All rights reserved.
- */
-
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
 

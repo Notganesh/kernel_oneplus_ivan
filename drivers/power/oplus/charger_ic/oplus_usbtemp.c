@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 
 #include <linux/ktime.h>
 #include <linux/delay.h>
@@ -46,7 +42,7 @@ struct wakeup_source *usbtemp_wakelock;
 #define USBTEMP_RECOVER_INTERVAL   (14400*1000) /*4 hours*/
 #define USBTEMP_CC_RECOVER_INTERVAL   (300*1000) /*5 mins*/
 
-int __attribute__((weak)) qpnp_get_prop_charger_voltage_now(void) {return 0;}
+int __attribute__((weak)) qpnp_get_prop_charger_voltage_now() {return 0;}
 
 static int usbtemp_debug = 0;
 module_param(usbtemp_debug, int, 0644);
@@ -65,15 +61,6 @@ void oplus_set_usb_temp_high(struct oplus_chg_chip *chip)
 {
 	chip->usb_status |= USB_TEMP_HIGH;
 }
-bool oplus_usb_temp_is_high(struct oplus_chg_chip *chip)
-{
-	if (chip && ((chip->usb_status & USB_TEMP_HIGH) == USB_TEMP_HIGH)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
 void oplus_clear_usb_temp_high(struct oplus_chg_chip *chip)
 {
 	chip->usb_status = chip->usb_status & (~USB_TEMP_HIGH);
@@ -125,8 +112,7 @@ int oplus_usbtemp_dischg_action(struct oplus_chg_chip *chip)
 	chg = &chip->pmic_spmi.smb5_chip->chg;
 #endif
 
-	if (get_eng_version() != HIGH_TEMP_AGING &&
-	    !oplus_is_ptcrb_version()) {
+	if (get_eng_version() != HIGH_TEMP_AGING) {
 		oplus_set_usb_temp_high(chip);
 		if (oplus_vooc_get_fastchg_started() == true) {
 			oplus_chg_set_chargerid_switch_val(0);
@@ -139,16 +125,13 @@ int oplus_usbtemp_dischg_action(struct oplus_chg_chip *chip)
 		if (is_vooc_support_single_batt_svooc() == true) {
 			vooc_enable_cp_ovp(0);
 		}
-		if (chip->chg_ops->really_suspend_charger)
-			chip->chg_ops->really_suspend_charger(true);
-		else
-			chip->chg_ops->charger_suspend();
-		usleep_range(5000,5000);
+		oplus_chg_suspend_charger();
+		usleep_range(10000,10000);
 		if (chip->chg_ops->set_typec_cc_open != NULL) {
 			chip->chg_ops->set_typec_cc_open();
 		} else {
 			pr_err("[oplus_usbtemp_dischg_action]: set_typec_cc_open is null");
-			if (chip->chg_ops->set_typec_sinkonly != NULL) {
+			if(chip->chg_ops->set_typec_sinkonly != NULL){
 				chip->chg_ops->set_typec_sinkonly();
 			} else {
 				pr_err("[oplus_usbtemp_dischg_action]: set_typec_sinkonly is null");
@@ -162,27 +145,12 @@ int oplus_usbtemp_dischg_action(struct oplus_chg_chip *chip)
 	mutex_lock(&chg->pinctrl_mutex);
 #endif
 
-	if (get_eng_version() == HIGH_TEMP_AGING ||
-	    oplus_is_ptcrb_version()) {
+	if (get_eng_version() == HIGH_TEMP_AGING) {
 		chg_err(" CONFIG_HIGH_TEMP_VERSION enable here,do not set vbus down \n");
-		if (chip->usbtemp_dischg_by_pmic) {
-			if (chip->chg_ops && chip->chg_ops->set_dischg_enable)
-				chip->chg_ops->set_dischg_enable(false);
-			else
-				pr_err("%s: chg_ops or set_dischg_enable is null!\n", __func__);
-		} else {
-			rc = pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_disable);
-		}
+		rc = pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_disable);
 	} else {
 		pr_err("[oplus_usbtemp_dischg_action]: set vbus down");
-		if (chip->usbtemp_dischg_by_pmic) {
-			if (chip->chg_ops && chip->chg_ops->set_dischg_enable)
-				chip->chg_ops->set_dischg_enable(true);
-			else
-				pr_err("%s: chg_ops or set_dischg_enable is null!\n", __func__);
-		} else {
-			rc = pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_enable);
-		}
+		rc = pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_enable);
 	}
 
 #ifndef CONFIG_OPLUS_CHARGER_MTK
@@ -220,9 +188,6 @@ void oplus_usbtemp_recover_func(struct oplus_chg_chip *chip)
 #endif
 	if(gpio_is_valid(chip->normalchg_gpio.dischg_gpio)) {
 		level = gpio_get_value(chip->normalchg_gpio.dischg_gpio);
-	} else if (chip->usbtemp_dischg_by_pmic) {
-		/* The method controlled by pmic pin can not read status, the level is always one. */
-		level = 1;
 	} else {
 		return;
 	}
@@ -242,20 +207,11 @@ void oplus_usbtemp_recover_func(struct oplus_chg_chip *chip)
 		} else {
 			chip->dischg_flag = false;
 			chg_err("dischg disable...[%d]\n", chip->usbtemp_volt);
-			if (chip->chg_ops->really_suspend_charger)
-				chip->chg_ops->really_suspend_charger(false);
 			oplus_clear_usb_temp_high(chip);
 #ifndef CONFIG_OPLUS_CHARGER_MTK
 			mutex_lock(&chg->pinctrl_mutex);
 #endif
-			if (chip->usbtemp_dischg_by_pmic) {
-				if (chip->chg_ops && chip->chg_ops->set_dischg_enable)
-					chip->chg_ops->set_dischg_enable(false);
-				else
-					pr_err("%s: chg_ops or set_dischg_enable is null!\n", __func__);
-			} else {
-				pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_disable);
-			}
+			pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_disable);
 #ifndef CONFIG_OPLUS_CHARGER_MTK
 			mutex_unlock(&chg->pinctrl_mutex);
 #endif
@@ -278,9 +234,6 @@ static void usbtemp_restart_work(struct work_struct *work)
 
 	if (gpio_is_valid(chip->normalchg_gpio.dischg_gpio)) {
 		level = gpio_get_value(chip->normalchg_gpio.dischg_gpio);
-	} else if (chip->usbtemp_dischg_by_pmic) {
-		/* The method controlled by pmic pin can not read status, the level is always one. */
-		level = 1;
 	} else {
 		goto done;
 	}
@@ -312,21 +265,12 @@ static void usbtemp_restart_work(struct work_struct *work)
 	if (level == 1) {
 		chip->dischg_flag = false;
 		chg_err("dischg disable...\n");
-		if (chip->chg_ops->really_suspend_charger)
-			chip->chg_ops->really_suspend_charger(false);
 		oplus_clear_usb_temp_high(chip);
 
 #ifndef CONFIG_OPLUS_CHARGER_MTK
 		mutex_lock(&chg->pinctrl_mutex);
 #endif
-		if (chip->usbtemp_dischg_by_pmic) {
-			if (chip->chg_ops && chip->chg_ops->set_dischg_enable)
-				chip->chg_ops->set_dischg_enable(false);
-			else
-				pr_err("%s: chg_ops or set_dischg_enable is null!\n", __func__);
-		} else {
-			pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_disable);
-		}
+		pinctrl_select_state(chip->normalchg_gpio.pinctrl, chip->normalchg_gpio.dischg_disable);
 
 #ifndef CONFIG_OPLUS_CHARGER_MTK
 		mutex_unlock(&chg->pinctrl_mutex);
@@ -364,7 +308,6 @@ static int oplus_ccdetect_is_gpio(struct oplus_chg_chip *chip)
 			chg_err("oplus_chg_chip is null!");
 		}
 		ret = 1;
-		return ret;
 	}
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 	if (gpio_is_valid(chip->chgic_mtk.oplus_info->ccdetect_gpio)) {
@@ -411,10 +354,6 @@ void oplus_update_usbtemp_current_status(struct oplus_chg_chip *chip)
 		return;
 	}
 
-	if (chip->vooc_project == 0) {
-		return;
-	}
-
 	if((chip->usb_temp_l < USB_30C || chip->usb_temp_l > USB_100C)
 			&& (chip->usb_temp_r < USB_30C || chip->usb_temp_r > USB_100C)) {
 		chip->smart_charge_user = SMART_CHARGE_USER_OTHER;
@@ -426,42 +365,18 @@ void oplus_update_usbtemp_current_status(struct oplus_chg_chip *chip)
 		return;
 	}
 
-	if(chip->new_usbtemp_cool_down_support) {
-		if((chip->icharging * -1) > 5000) {
-			if(chip->usbtemp_cool_down_temp_gap == chip->usbtemp_cool_down_temp_first_gap) {
-				limit_cur_cnt_r = 0;
-				recover_cur_cnt_r = 0;
-				limit_cur_cnt_l = 0;
-				recover_cur_cnt_l = 0;
-				chg_err("usbtemp_cool_down_temp_gap to %d",chip->usbtemp_cool_down_temp_second_gap);
-			}
-			chip->usbtemp_cool_down_temp_gap = chip->usbtemp_cool_down_temp_second_gap;
-			chip->usbtemp_cool_down_recovery_temp_gap = chip->usbtemp_cool_down_recovery_temp_second_gap;
-		} else {
-			if(chip->usbtemp_cool_down_temp_gap == chip->usbtemp_cool_down_temp_second_gap) {
-				limit_cur_cnt_r = 0;
-				recover_cur_cnt_r = 0;
-				limit_cur_cnt_l = 0;
-				recover_cur_cnt_l = 0;
-				chg_err("usbtemp_cool_down_temp_gap to %d",chip->usbtemp_cool_down_temp_first_gap);
-			}
-			chip->usbtemp_cool_down_temp_gap = chip->usbtemp_cool_down_temp_first_gap;
-			chip->usbtemp_cool_down_recovery_temp_gap = chip->usbtemp_cool_down_recovery_temp_first_gap;
-		}
-	}
-
-	if ((chip->usb_temp_r  - chip->tbatt_temp/10) >= chip->usbtemp_cool_down_temp_gap) {
+	if ((chip->usb_temp_r  - chip->tbatt_temp/10) >= 12) {
 		limit_cur_cnt_r++;
 		recover_cur_cnt_r = 0;
-	} else if ((chip->usb_temp_r  - chip->tbatt_temp/10) <= chip->usbtemp_cool_down_recovery_temp_gap)  {
+	} else if ((chip->usb_temp_r  - chip->tbatt_temp/10) <= 6)  {
 		recover_cur_cnt_r++;
 		limit_cur_cnt_r = 0;
 	}
 
-	if ((chip->usb_temp_l  - chip->tbatt_temp/10) >= chip->usbtemp_cool_down_temp_gap) {
+	if ((chip->usb_temp_l  - chip->tbatt_temp/10) >= 12) {
 		limit_cur_cnt_l++;
 		recover_cur_cnt_l = 0;
-	} else if ((chip->usb_temp_l  - chip->tbatt_temp/10) <= chip->usbtemp_cool_down_recovery_temp_gap)  {
+	} else if ((chip->usb_temp_l  - chip->tbatt_temp/10) <= 6)  {
 		recover_cur_cnt_l++;
 		limit_cur_cnt_l = 0;
 	}
@@ -523,7 +438,7 @@ int oplus_usbtemp_monitor_common(void *data)
 		__func__, chip->usbtemp_max_temp_thr, chip->usbtemp_temp_up_time_thr);
 	while (!kthread_should_stop()) {
 		if(chip->chg_ops->oplus_usbtemp_monitor_condition != NULL){
-			wait_event_interruptible(chip->oplus_usbtemp_wq, chip->usbtemp_check);
+			wait_event_interruptible(chip->oplus_usbtemp_wq,chip->usbtemp_check);
 		} else {
 			pr_err("[oplus_usbtemp_monitor_main]:condition pointer is NULL");
 			return 0;
@@ -570,8 +485,7 @@ int oplus_usbtemp_monitor_common(void *data)
 				pr_err("countl : %d",count_l);
 			}
 			if (count_r >= retry_cnt || count_l >= retry_cnt) {
-				if (!IS_ERR_OR_NULL(chip->normalchg_gpio.dischg_enable) ||
-				    chip->usbtemp_dischg_by_pmic) {
+				if (!IS_ERR_OR_NULL(chip->normalchg_gpio.dischg_enable)) {
 					chip->dischg_flag = true;
 					condition1 = true;
 					chg_err("dischg enable1...[%d, %d]\n", chip->usb_temp_l, chip->usb_temp_r);
@@ -596,8 +510,7 @@ int oplus_usbtemp_monitor_common(void *data)
 				pr_err("countl : %d", count_l);
 			}
 			if (count_r >= retry_cnt || count_l >= retry_cnt) {
-				if (!IS_ERR_OR_NULL(chip->normalchg_gpio.dischg_enable) ||
-				    chip->usbtemp_dischg_by_pmic) {
+				if (!IS_ERR_OR_NULL(chip->normalchg_gpio.dischg_enable)) {
 					chip->dischg_flag = true;
 					condition1 = true;
 					chg_err("dischg enable1...[%d, %d]\n", chip->usb_temp_l, chip->usb_temp_r);
@@ -638,8 +551,7 @@ int oplus_usbtemp_monitor_common(void *data)
 				current_temp_r = chip->usb_temp_r;
 				if ((count_l >= retry_cnt &&  chip->usb_temp_l > USB_30C && chip->usb_temp_l < USB_100C)
 						|| (count_r >= retry_cnt &&  chip->usb_temp_r > USB_30C  && chip->usb_temp_r < USB_100C))  {
-					if (!IS_ERR_OR_NULL(chip->normalchg_gpio.dischg_enable) ||
-					    chip->usbtemp_dischg_by_pmic) {
+					if (!IS_ERR_OR_NULL(chip->normalchg_gpio.dischg_enable)) {
 						chip->dischg_flag = true;
 						chg_err("dischg enable3...,current_temp_l=%d,last_usb_temp_l=%d,current_temp_r=%d,last_usb_temp_r =%d\n",
 								current_temp_l, last_usb_temp_l, current_temp_r, last_usb_temp_r);
@@ -670,18 +582,13 @@ int oplus_usbtemp_monitor_common(void *data)
 			oplus_usbtemp_dischg_action(chip);
 			condition1 = false;
 			condition2 = false;
-			if ((get_eng_version() != HIGH_TEMP_AGING &&
-			    !oplus_is_ptcrb_version()) &&
-			    (oplus_ccdetect_is_gpio(chip) == 0)) {
+			if ((get_eng_version() != HIGH_TEMP_AGING) && (oplus_ccdetect_is_gpio(chip) == 0)) {
 				chg_err("start delay work for recover charging");
-				count = 0;
-				last_usb_temp_r = chip->usb_temp_r;
-				last_usb_temp_l = chip->usb_temp_l;
 				oplus_usbtemp_set_recover(chip);
 			}
 		}
 		msleep(delay);
-		if (usbtemp_debug & OPEN_LOG_BIT) {
+		if(usbtemp_debug & OPEN_LOG_BIT){
 			pr_err("usbtemp: delay %d",delay);
 			chg_err("==================usbtemp_volt_l[%d], usb_temp_l[%d], usbtemp_volt_r[%d], usb_temp_r[%d]\n",
 				chip->usbtemp_volt_l,chip->usb_temp_l, chip->usbtemp_volt_r, chip->usb_temp_r);

@@ -1,15 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 #ifdef CONFIG_OPLUS_CHARGER_MTK
 #include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/version.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 #include <linux/xlog.h>
-#endif
 #include <linux/gpio.h>
 #include <linux/module.h>
 #else
@@ -528,11 +520,6 @@ struct oplus_adapter_operations oplus_adapter_ops = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 static int __init adapter_ic_init(void)
 #else
-void adapter_ic_exit(void)
-{
-	return;
-}
-
 int adapter_ic_init(void)
 #endif
 {
@@ -554,7 +541,8 @@ int adapter_ic_init(void)
         adapter_ic->adapter_firmware_data = adapter_stm8s_firmware_data;
         adapter_ic->adapter_fw_data_count = sizeof(adapter_stm8s_firmware_data);
 
-	the_chip = adapter_ic;
+		the_chip = adapter_ic;
+
 
         chip = kzalloc(sizeof(struct oplus_adapter_chip), GFP_KERNEL);
         if (!chip) {
@@ -562,15 +550,24 @@ int adapter_ic_init(void)
                 return -1;
         }
 
+ //       chip->client = client;
+ //       chip->dev = &client->dev;
         chip->vops = &oplus_adapter_ops;
-
+	
         oplus_adapter_init(chip);
-
-	register_adapter_devinfo();
+		
+		register_adapter_devinfo();
 
         chg_debug(" success\n");
         return 0;
 }
+
+/*
+static void __init adapter_ic_exit(void)
+{
+        return;
+}
+*/
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 subsys_initcall(adapter_ic_init);

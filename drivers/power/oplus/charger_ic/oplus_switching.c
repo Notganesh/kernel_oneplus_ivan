@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 #include "oplus_switching.h"
 #include <linux/module.h>
 #include <linux/kernel.h>

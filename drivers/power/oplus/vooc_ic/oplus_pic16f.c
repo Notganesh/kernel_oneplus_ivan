@@ -1,8 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
 
 #define VOOC_MCU_PIC16F
 
@@ -564,16 +559,7 @@ struct i2c_driver pic16f_i2c_driver = {
 	.id_table = pic16f_id,
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 static int __init pic16f_subsys_init(void)
-#else
-void pic16f_subsys_exit(void)
-{
-	i2c_del_driver(&pic16f_i2c_driver);
-}
-
-int pic16f_subsys_init(void)
-#endif
 {
 	int ret=0;
 
@@ -591,9 +577,14 @@ int pic16f_subsys_init(void)
 	return ret;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
+/*
+static void  pic16f_exit(void)
+{
+	i2c_del_driver(&pic16f_i2c_driver);
+}
+*/
+
 subsys_initcall(pic16f_subsys_init);
-#endif
 MODULE_DESCRIPTION("Driver for oplus vooc pic16f fast mcu");
 MODULE_LICENSE("GPL v2");
 

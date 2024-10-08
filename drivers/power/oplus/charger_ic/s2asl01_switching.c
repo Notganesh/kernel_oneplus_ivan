@@ -22,10 +22,6 @@
 #include "../oplus_charger.h"
 #include "../oplus_gauge.h"
 #include <soc/oplus/system/oplus_project.h>
-#ifdef CONFIG_OPLUS_CHARGER_MTK
-#include <mt-plat/mtk_boot_common.h>
-#endif
-
 struct s2asl01_switching_data *g_switching;
 static int s2asl01_boot_mode;
 int s2asl01_switching_set_fastcharge_current(int charge_curr_ma);

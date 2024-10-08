@@ -60,8 +60,4 @@ config OPLUS_CHARGER_OPTIGA
 	bool "OPLUS OPTIGA soc node"
 	help
 	  Say Y to include support
-
-config OPLUS_MTK_DRM_GKI_NOTIFY_CHG
-	default n
-	tristate "chg mtk gki notify"
 endif #OPLUS_CHARGER

@@ -37,35 +37,8 @@
 #include "../oplus_charger.h"
 #include "oplus_sc8547.h"
 
-static struct oplus_voocphy_manager *oplus_voocphy_mg = NULL;
 static struct mutex i2c_rw_lock;
-static bool error_reported = false;
-extern void oplus_chg_sc8547_error(int report_flag, int *buf, int len);
 static int sc8547_slave_get_chg_enable(struct oplus_voocphy_manager *chip, u8 *data);
-
-#define I2C_ERR_NUM 10
-#define SLAVE_I2C_ERROR (1 << 1)
-
-static void sc8547_slave_i2c_error(bool happen)
-{
-	int report_flag = 0;
-	if (!oplus_voocphy_mg || error_reported)
-		return;
-
-	if (happen) {
-		oplus_voocphy_mg->slave_voocphy_iic_err = 1;
-		oplus_voocphy_mg->slave_voocphy_iic_err_num++;
-		if (oplus_voocphy_mg->slave_voocphy_iic_err_num >= I2C_ERR_NUM){
-			report_flag |= SLAVE_I2C_ERROR;
-			oplus_chg_sc8547_error(report_flag, NULL, 0);
-			error_reported = true;
-		}
-	} else {
-		oplus_voocphy_mg->slave_voocphy_iic_err_num = 0;
-		oplus_chg_sc8547_error(0, NULL, 0);
-	}
-}
-
 
 /************************************************************************/
 static int __sc8547_slave_read_byte(struct i2c_client *client, u8 reg, u8 *data)
@@ -74,11 +47,10 @@ static int __sc8547_slave_read_byte(struct i2c_client *client, u8 reg, u8 *data)
 
 	ret = i2c_smbus_read_byte_data(client, reg);
 	if (ret < 0) {
-		sc8547_slave_i2c_error(true);
 		pr_err("i2c read fail: can't read from reg 0x%02X\n", reg);
 		return ret;
 	}
-	sc8547_slave_i2c_error(false);
+
 	*data = (u8) ret;
 
 	return 0;
@@ -90,12 +62,10 @@ static int __sc8547_slave_write_byte(struct i2c_client *client, int reg, u8 val)
 
 	ret = i2c_smbus_write_byte_data(client, reg, val);
 	if (ret < 0) {
-		sc8547_slave_i2c_error(true);
 		pr_err("i2c write fail: can't write 0x%02X to reg 0x%02X: %d\n",
 		       val, reg, ret);
 		return ret;
 	}
-	sc8547_slave_i2c_error(false);
 
 	return 0;
 }
@@ -152,18 +122,11 @@ static void sc8547_slave_update_data(struct oplus_voocphy_manager *chip)
 	u8 data_block[2] = {0};
 	int i = 0;
 	u8 int_flag = 0;
-	s32 ret = 0;
 
 	sc8547_slave_read_byte(chip->slave_client, SC8547_REG_0F, &int_flag);
 
 	/*parse data_block for improving time of interrupt*/
-	ret = i2c_smbus_read_i2c_block_data(chip->slave_client, SC8547_REG_13, 2, data_block);
-	if (ret < 0) {
-		sc8547_slave_i2c_error(true);
-		pr_err("sc8547_update_data slave read error \n");
-	} else {
-		sc8547_slave_i2c_error(false);
-	}
+	i2c_smbus_read_i2c_block_data(chip->slave_client, SC8547_REG_13, 2, data_block);
 	for (i=0; i<2; i++) {
 		pr_info("data_block[%d] = %u\n", i, data_block[i]);
 	}
@@ -269,51 +232,6 @@ static int sc8547_slave_set_chg_enable(struct oplus_voocphy_manager *chip, bool 
 		pr_err("SC8547 slave close charge 0x7 reg will be 0x05!\n");
 		return sc8547_slave_write_byte(chip->slave_client, SC8547_REG_07, 0x05);
 	}
-}
-
-static int sc8547_slave_get_voocphy_enable(struct oplus_voocphy_manager *chip, u8 *data)
-{
-	int ret = 0;
-
-	if (!chip) {
-		pr_err("Failed\n");
-		return -1;
-	}
-
-	ret = sc8547_slave_read_byte(chip->client, SC8547_REG_2B, data);
-	if (ret < 0) {
-		pr_err("SC8547_REG_2B\n");
-		return -1;
-	}
-
-	return ret;
-}
-
-static void sc8547_slave_dump_reg_in_err_issue(struct oplus_voocphy_manager *chip)
-{
-	int i = 0, p = 0;
-	//u8 value[DUMP_REG_CNT] = {0};
-	if(!chip) {
-		pr_err( "!!!!! oplus_voocphy_manager chip NULL");
-		return;
-	}
-
-	for( i = 0; i < 37; i++) {
-		p = p + 1;
-		sc8547_slave_read_byte(chip->client, i, &chip->slave_reg_dump[p]);
-	}
-	for( i = 0; i < 9; i++) {
-		p = p + 1;
-		sc8547_slave_read_byte(chip->client, 43 + i, &chip->slave_reg_dump[p]);
-	}
-	p = p + 1;
-	sc8547_slave_read_byte(chip->client, SC8547_REG_36, &chip->slave_reg_dump[p]);
-	p = p + 1;
-	sc8547_slave_read_byte(chip->client, SC8547_REG_3A, &chip->slave_reg_dump[p]);
-	pr_err( "p[%d], ", p);
-
-	///memcpy(chip->voocphy.reg_dump, value, DUMP_REG_CNT);
-	return;
 }
 
 static int sc8547_slave_init_device(struct oplus_voocphy_manager *chip)
@@ -499,11 +417,9 @@ static struct oplus_voocphy_operations oplus_sc8547_slave_ops = {
 	.update_data		= sc8547_slave_update_data,
 	.get_chg_enable		= sc8547_slave_get_chg_enable,
 	.set_chg_enable		= sc8547_slave_set_chg_enable,
-	.get_ichg		= sc8547_slave_get_ichg,
-	.reset_voocphy      	= sc8547_slave_reset_voocphy,
+	.get_ichg			= sc8547_slave_get_ichg,
+	.reset_voocphy      = sc8547_slave_reset_voocphy,
 	.get_cp_status 		= sc8547_slave_get_cp_status,
-	.get_voocphy_enable 	= sc8547_slave_get_voocphy_enable,
-	.dump_voocphy_reg	= sc8547_slave_dump_reg_in_err_issue,
 };
 
 static int sc8547_slave_charger_probe(struct i2c_client *client,
@@ -544,8 +460,6 @@ static int sc8547_slave_charger_probe(struct i2c_client *client,
 	chip->slave_ops = &oplus_sc8547_slave_ops;
 
 	oplus_voocphy_slave_init(chip);
-
-	oplus_voocphy_get_chip(&oplus_voocphy_mg);
 
 	pr_err("sc8547_slave_parse_dt successfully!\n");
 

@@ -1,7 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
 
 #ifndef __OPLUS_BATTERY_MTK6877_H__
 #define __OPLUS_BATTERY_MTK6877_H__
@@ -22,15 +18,15 @@
 #include <linux/uaccess.h>
 
 #include <mt-plat/charger_class.h>
-#include "../../../../drivers/misc/mediatek/typec/tcpc/inc/tcpm.h"
-#include "../../../../drivers/misc/mediatek/typec/tcpc/inc/mtk_direct_charge_vdm.h"
+#include "../../../../kernel-4.14/drivers/misc/mediatek/typec/tcpc/inc/tcpm.h"
+#include "../../../../kernel-4.14/drivers/misc/mediatek/typec/tcpc/inc/mtk_direct_charge_vdm.h"
 struct charger_manager;
-#include "../../../../drivers/power/supply/mediatek/charger/mtk_pe_intf.h"
-#include "../../../../drivers/power/supply/mediatek/charger/mtk_pe20_intf.h"
-#include "../../../../drivers/power/supply/mediatek/charger/mtk_pdc_intf.h"
+#include "../../../../kernel-4.14/drivers/power/supply/mediatek/charger/mtk_pe_intf.h"
+#include "../../../../kernel-4.14/drivers/power/supply/mediatek/charger/mtk_pe20_intf.h"
+#include "../../../../kernel-4.14/drivers/power/supply/mediatek/charger/mtk_pdc_intf.h"
 
-#include "../../../../drivers/power/supply/mediatek/charger/mtk_charger_init.h"
-#include "../../../../drivers/power/supply/mediatek/charger/mtk_charger_intf.h"
+#include "../../../../kernel-4.14/drivers/power/supply/mediatek/charger/mtk_charger_init.h"
+#include "../../../../kernel-4.14/drivers/power/supply/mediatek/charger/mtk_charger_intf.h"
 
 typedef enum {
 	STEP_CHG_STATUS_STEP1 = 0,	/*16C~44C*/

@@ -80,30 +80,6 @@ static struct oplus_voocphy_operations oplus_adsp_voocphy_ops = {
 	.adsp_voocphy_reset_again = oplus_adsp_voocphy_reset_again,
 };
 
-#define VOLTAGE_2000MV   2000
-#define TIME_3SEC     3000
-
-static void oplus_voocphy_check_charger_out_work_func(struct work_struct *work)
-{
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct oplus_voocphy_manager *chip = container_of(dwork,
-			struct oplus_voocphy_manager, voocphy_check_charger_out_work);
-	int chg_vol = 0;
-
-	chg_vol = oplus_chg_get_charger_voltage();
-	if (chg_vol >= 0 && chg_vol < VOLTAGE_2000MV) {
-		chip->fastchg_dummy_start = false;
-		printk(KERN_ERR "charger out, fastchg_dummy_start:%d\n", chip->fastchg_dummy_start);
-	}
-}
-
-static void oplus_voocphy_check_charger_out(struct oplus_voocphy_manager *chip)
-{
-	printk(KERN_ERR "%s\n", __func__);
-	schedule_delayed_work(&chip->voocphy_check_charger_out_work,
-		round_jiffies_relative(msecs_to_jiffies(TIME_3SEC)));
-}
-
 void oplus_adsp_voocphy_handle_status(struct power_supply *psy, int intval)
 {
 	struct oplus_voocphy_manager *chip = g_voocphy_chip;
@@ -161,7 +137,6 @@ void oplus_adsp_voocphy_handle_status(struct power_supply *psy, int intval)
 		chip->fastchg_dummy_start = false;
 		chip->fastchg_to_normal = true;
 		chip->fastchg_ing = false;
-		oplus_chg_unsuspend_charger();
 		printk(KERN_ERR "!!![adsp_voocphy] fastchg to normal: [%d]\n",
 			chip->fastchg_to_normal);
 		power_supply_changed(psy);
@@ -184,7 +159,6 @@ void oplus_adsp_voocphy_handle_status(struct power_supply *psy, int intval)
 		chip->fast_chg_type = 0;
 		oplus_chg_set_charger_type_unknown();
 		oplus_chg_voocphy_err();
-		oplus_chg_unsuspend_charger();
 		oplus_chg_wake_update_work();
 		printk(KERN_ERR "!!![adsp_voocphy] fastchg err commu: [%d]\n", intval);
 	} else if ((intval & 0xFF) == ADSP_VPHY_FAST_NOTIFY_SWITCH_TEMP_RANGE) {
@@ -193,53 +167,24 @@ void oplus_adsp_voocphy_handle_status(struct power_supply *psy, int intval)
 		chip->fastchg_dummy_start = true;
 		chip->fastchg_to_normal = false;
 		chip->fastchg_ing = false;
-		oplus_chg_unsuspend_charger();
 		oplus_chg_set_charger_type_unknown();
 		power_supply_changed(psy);
 		printk(KERN_ERR "!!![adsp_voocphy] fastchg switch temp range: [%d]\n", intval);
 	} else if ((intval & 0xFF) == ADSP_VPHY_FAST_NOTIFY_COMMU_CLK_ERR) {
-		chip->fastchg_start = false;
-		chip->fastchg_to_warm = false;
-		chip->fastchg_dummy_start = true;
-		chip->fastchg_to_normal = false;
-		chip->fastchg_ing = false;
 		oplus_chg_set_charger_type_unknown();
-		power_supply_changed(psy);
-		oplus_voocphy_check_charger_out(chip);
 		printk(KERN_ERR "!!![adsp_voocphy] fastchg commu clk err: [%d]\n", intval);
 	} else if ((intval & 0xFF) == ADSP_VPHY_FAST_NOTIFY_HW_VBATT_HIGH
 		|| (intval & 0xFF) == ADSP_VPHY_FAST_NOTIFY_HW_TBATT_HIGH) {
-		chip->fastchg_start = false;
-		chip->fastchg_to_warm = false;
-		chip->fastchg_dummy_start = false;
-		chip->fastchg_to_normal = false;
-		chip->fastchg_ing = false;
-		chip->fast_chg_type = 0;
 		oplus_chg_voocphy_err();
-		oplus_chg_unsuspend_charger();
 		oplus_chg_wake_update_work();
 		printk(KERN_ERR "!!![adsp_voocphy] fastchg hw vbatt || tbatt high: [%d]\n", intval);
 	} else if ((intval & 0xFF) == ADSP_VPHY_FAST_NOTIFY_COMMU_TIME_OUT) {
-		chip->fastchg_start = false;
-		chip->fastchg_to_warm = false;
-		chip->fastchg_dummy_start = false;
-		chip->fastchg_to_normal = false;
-		chip->fastchg_ing = false;
-		chip->fast_chg_type = 0;
 		oplus_chg_voocphy_err();
 		oplus_chg_set_charger_type_unknown();
-		oplus_chg_unsuspend_charger();
 		oplus_chg_wake_update_work();
 		printk(KERN_ERR "!!![adsp_voocphy] fastchg timeout: [%d]\n", intval);
 	} else {
-		chip->fastchg_start = false;
-		chip->fastchg_to_warm = false;
-		chip->fastchg_dummy_start = false;
-		chip->fastchg_to_normal = false;
-		chip->fastchg_ing = false;
-		chip->fast_chg_type = 0;
 		oplus_chg_voocphy_err();
-		oplus_chg_unsuspend_charger();
 		oplus_chg_wake_update_work();
 		printk(KERN_ERR "!!![adsp_voocphy] non handle status: [%d]\n", intval);
 	}
@@ -267,8 +212,6 @@ static int adsp_voocphy_probe(struct platform_device *pdev)
 	chip->ops = &oplus_adsp_voocphy_ops;
 	g_voocphy_chip = chip;
 	oplus_adsp_voocphy_clear_status();
-	INIT_DELAYED_WORK(&chip->voocphy_check_charger_out_work,
-						oplus_voocphy_check_charger_out_work_func);
 
 	pr_err("%s: end\n", __func__);
 
