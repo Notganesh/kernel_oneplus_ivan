@@ -103,16 +103,12 @@ OPLUS_FEATURE_STORAGE_TOOL \
 OPLUS_FEATURE_CAMERA_COMMON \
 OPLUS_FEATURE_WIFI_OPLUSWFD
 
-
 $(foreach myfeature,$(ALLOWED_MCROS),\
-         $(warning myfeature is $(myfeature)) \
          $(eval KBUILD_CFLAGS += -D$(myfeature)) \
          $(eval KBUILD_CPPFLAGS += -D$(myfeature)) \
          $(eval CFLAGS_KERNEL += -D$(myfeature)) \
          $(eval CFLAGS_MODULE += -D$(myfeature)) \
 )
-
-
 
 # BSP team can do customzation by referring the feature variables
 ifeq ($(OPLUS_FEATURE_PREFER_SILVER),yes)
