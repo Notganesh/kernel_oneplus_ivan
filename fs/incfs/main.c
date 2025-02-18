@@ -30,6 +30,18 @@ static ssize_t corefs_show(struct kobject *kobj,
 
 static struct kobj_attribute corefs_attr = __ATTR_RO(corefs);
 
+<<<<<<< HEAD
+=======
+static ssize_t bugfix_inode_eviction_show(struct kobject *kobj,
+			 struct kobj_attribute *attr, char *buff)
+{
+	return snprintf(buff, PAGE_SIZE, "supported\n");
+}
+
+static struct kobj_attribute bugfix_inode_eviction_attr =
+	__ATTR_RO(bugfix_inode_eviction);
+
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 static ssize_t mounter_context_for_backing_rw_show(struct kobject *kobj,
 			  struct kobj_attribute *attr, char *buff)
 {
@@ -41,6 +53,10 @@ static struct kobj_attribute mounter_context_for_backing_rw_attr =
 
 static struct attribute *attributes[] = {
 	&corefs_attr.attr,
+<<<<<<< HEAD
+=======
+	&bugfix_inode_eviction_attr.attr,
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	&mounter_context_for_backing_rw_attr.attr,
 	NULL,
 };

@@ -74,7 +74,15 @@
 #include <linux/socket.h>		/* for "struct sockaddr" et al	*/
 #include <linux/if.h>			/* for IFNAMSIZ and co... */
 
+<<<<<<< HEAD
 #include <stddef.h>                     /* for offsetof */
+=======
+#ifdef __KERNEL__
+#	include <linux/stddef.h>	/* for offsetof */
+#else
+#	include <stddef.h>		/* for offsetof */
+#endif
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
 /***************************** VERSION *****************************/
 /*

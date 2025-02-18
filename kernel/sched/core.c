@@ -877,6 +877,7 @@ static inline unsigned int get_opp_capacity(struct cpufreq_policy *policy,
 
 void init_opp_capacity_tbl(void)
 {
+<<<<<<< HEAD
 	int cpu, cid, prev_cid = -1;
 	int count = 0;
 	int i, idx = 0;
@@ -886,6 +887,13 @@ void init_opp_capacity_tbl(void)
 	const struct sched_group_energy *sge;
 	struct cpufreq_policy *policy;
 	unsigned int *tbl;
+=======
+	if (task_on_rq_migrating(p))
+		flags |= ENQUEUE_MIGRATED;
+
+	if (task_contributes_to_load(p))
+		rq->nr_uninterruptible--;
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
 	count = system_opp_count();
 	if (count < 0)
@@ -3189,6 +3197,9 @@ out:
 
 bool cpus_share_cache(int this_cpu, int that_cpu)
 {
+	if (this_cpu == that_cpu)
+		return true;
+
 	return per_cpu(sd_llc_id, this_cpu) == per_cpu(sd_llc_id, that_cpu);
 }
 
@@ -4727,8 +4738,7 @@ static noinline void __schedule_bug(struct task_struct *prev)
 		dump_preempt_disable_ips(current);
 		pr_cont("\n");
 	}
-	if (panic_on_warn)
-		panic("scheduling while atomic\n");
+	check_panic_on_warn("scheduling while atomic");
 
 	dump_stack();
 	add_taint(TAINT_WARN, LOCKDEP_STILL_OK);
@@ -6721,6 +6731,7 @@ SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
 {
 	int ret = -EINVAL;
 
+<<<<<<< HEAD
 	switch (policy) {
 	case SCHED_FIFO:
 	case SCHED_RR:
@@ -6735,6 +6746,10 @@ SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
 	}
 	return ret;
 }
+=======
+	if (!zalloc_cpumask_var(&mask, GFP_KERNEL))
+		return -ENOMEM;
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
 /**
  * sys_sched_get_priority_min - return minimum RT priority.
@@ -6748,6 +6763,7 @@ SYSCALL_DEFINE1(sched_get_priority_min, int, policy)
 {
 	int ret = -EINVAL;
 
+<<<<<<< HEAD
 	switch (policy) {
 	case SCHED_FIFO:
 	case SCHED_RR:
@@ -6758,6 +6774,12 @@ SYSCALL_DEFINE1(sched_get_priority_min, int, policy)
 	case SCHED_BATCH:
 	case SCHED_IDLE:
 		ret = 0;
+=======
+		if (copy_to_user(user_mask_ptr, cpumask_bits(mask), retlen))
+			ret = -EFAULT;
+		else
+			ret = retlen;
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	}
 	return ret;
 }
@@ -6792,9 +6814,15 @@ SYSCALL_DEFINE2(sched_rr_get_interval, pid_t, pid,
 	if (!p)
 		goto out_unlock;
 
+<<<<<<< HEAD
 	retval = security_task_getscheduler(p);
 	if (retval)
 		goto out_unlock;
+=======
+	preempt_disable();
+	rq_unlock_irq(rq, &rf);
+	sched_preempt_enable_no_resched();
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
 	rq = task_rq_lock(p, &rf);
 	time_slice = 0;

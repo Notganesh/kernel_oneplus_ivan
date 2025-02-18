@@ -263,6 +263,8 @@ struct hid_item {
 #define HID_CP_SELECTION	0x000c0080
 #define HID_CP_MEDIASELECTION	0x000c0087
 #define HID_CP_SELECTDISC	0x000c00ba
+#define HID_CP_VOLUMEUP		0x000c00e9
+#define HID_CP_VOLUMEDOWN	0x000c00ea
 #define HID_CP_PLAYBACKSPEED	0x000c00f1
 #define HID_CP_PROXIMITY	0x000c0109
 #define HID_CP_SPEAKERSYSTEM	0x000c0160
@@ -769,6 +771,7 @@ struct hid_driver {
  * @raw_request: send raw report request to device (e.g. feature report)
  * @output_report: send output report to device
  * @idle: send idle request to device
+ * @max_buffer_size: over-ride maximum data buffer size (default: HID_MAX_BUFFER_SIZE)
  */
 struct hid_ll_driver {
 	int (*start)(struct hid_device *hdev);
@@ -793,6 +796,8 @@ struct hid_ll_driver {
 	int (*output_report) (struct hid_device *hdev, __u8 *buf, size_t len);
 
 	int (*idle)(struct hid_device *hdev, int report, int idle, int reqtype);
+
+	unsigned int max_buffer_size;
 };
 
 extern struct hid_ll_driver i2c_hid_ll_driver;
@@ -935,7 +940,10 @@ static inline void hid_map_usage(struct hid_input *hidinput,
 		__u8 type, unsigned int c)
 {
 	struct input_dev *input = hidinput->input;
+<<<<<<< HEAD
 
+=======
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	unsigned long *bmap = NULL;
 	unsigned int limit = 0;
 
@@ -960,10 +968,18 @@ static inline void hid_map_usage(struct hid_input *hidinput,
 
 	if (unlikely(c > limit || !bmap)) {
 		pr_warn_ratelimited("%s: Invalid code %d type %d\n",
+<<<<<<< HEAD
 				input->name, c, type);
 		*bit = NULL;
 		return;
 	}
+=======
+				    input->name, c, type);
+		*bit = NULL;
+		return;
+	}
+
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	usage->type = type;
 	usage->code = c;
 	*max = limit;
@@ -1118,8 +1134,7 @@ static inline void hid_hw_wait(struct hid_device *hdev)
  */
 static inline u32 hid_report_len(struct hid_report *report)
 {
-	/* equivalent to DIV_ROUND_UP(report->size, 8) + !!(report->id > 0) */
-	return ((report->size - 1) >> 3) + 1 + (report->id > 0);
+	return DIV_ROUND_UP(report->size, 8) + (report->id > 0);
 }
 
 int hid_report_raw_event(struct hid_device *hid, int type, u8 *data, u32 size,

@@ -119,9 +119,14 @@ static inline void apply_alternatives_module(void *start, size_t length) { }
 	.popsection
 	.subsection 1
 663:	\insn2
+<<<<<<< HEAD
 664:	.previous
 	.org	. - (664b-663b) + (662b-661b)
+=======
+664:	.org	. - (664b-663b) + (662b-661b)
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	.org	. - (662b-661b) + (664b-663b)
+	.popsection
 	.endif
 .endm
 
@@ -191,11 +196,11 @@ static inline void apply_alternatives_module(void *start, size_t length) { }
  */
 .macro alternative_endif
 664:
+	.org	. - (664b-663b) + (662b-661b)
+	.org	. - (662b-661b) + (664b-663b)
 	.if .Lasm_alt_mode==0
 	.previous
 	.endif
-	.org	. - (664b-663b) + (662b-661b)
-	.org	. - (662b-661b) + (664b-663b)
 .endm
 
 /*

@@ -75,10 +75,14 @@ usb_gadget_get_string (struct usb_gadget_strings *table, int id, u8 *buf)
 	}
 #else
 	/* string descriptors have length, tag, then UTF16-LE text */
-	len = min ((size_t) 126, strlen (s->s));
+	len = min((size_t)USB_MAX_STRING_LEN, strlen(s->s));
 	len = utf8s_to_utf16s(s->s, len, UTF16_LITTLE_ENDIAN,
+<<<<<<< HEAD
 			(wchar_t *) &buf[2], 126);
 #endif
+=======
+			(wchar_t *) &buf[2], USB_MAX_STRING_LEN);
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	if (len < 0)
 		return -EINVAL;
 	buf [0] = (len + 1) * 2;

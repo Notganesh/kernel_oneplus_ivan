@@ -148,14 +148,21 @@ static int holtek_kbd_probe(struct hid_device *hdev,
 
 	if (!hid_is_usb(hdev))
 		return -EINVAL;
+<<<<<<< HEAD
 
 	ret = hid_parse(hdev);
+=======
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
+	ret = hid_parse(hdev);
 	if (!ret)
 		ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
 
 	intf = to_usb_interface(hdev->dev.parent);
+<<<<<<< HEAD
 
+=======
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	if (!ret && intf->cur_altsetting->desc.bInterfaceNumber == 1) {
 		struct hid_input *hidinput;
 		list_for_each_entry(hidinput, &hdev->inputs, list) {

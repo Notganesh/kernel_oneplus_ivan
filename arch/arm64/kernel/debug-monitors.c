@@ -161,6 +161,12 @@ static void clear_user_regs_spsr_ss(struct user_pt_regs *regs)
 	regs->pstate &= ~DBG_SPSR_SS;
 }
 NOKPROBE_SYMBOL(clear_user_regs_spsr_ss);
+<<<<<<< HEAD
+=======
+
+#define set_regs_spsr_ss(r)	set_user_regs_spsr_ss(&(r)->user_regs)
+#define clear_regs_spsr_ss(r)	clear_user_regs_spsr_ss(&(r)->user_regs)
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
 #define set_regs_spsr_ss(r)	set_user_regs_spsr_ss(&(r)->user_regs)
 #define clear_regs_spsr_ss(r)	clear_user_regs_spsr_ss(&(r)->user_regs)
@@ -468,6 +474,11 @@ int kernel_active_single_step(void)
 	return mdscr_read() & DBG_MDSCR_SS;
 }
 NOKPROBE_SYMBOL(kernel_active_single_step);
+
+void kernel_rewind_single_step(struct pt_regs *regs)
+{
+	set_regs_spsr_ss(regs);
+}
 
 /* ptrace API */
 void user_enable_single_step(struct task_struct *task)

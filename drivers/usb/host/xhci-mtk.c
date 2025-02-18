@@ -710,6 +710,13 @@ static void xhci_mtk_quirks(struct device *dev, struct xhci_hcd *xhci)
 	xhci->quirks |= XHCI_SPURIOUS_SUCCESS;
 	if (mtk->lpm_support)
 		xhci->quirks |= XHCI_LPM_SUPPORT;
+
+	/*
+	 * MTK xHCI 0.96: PSA is 1 by default even if doesn't support stream,
+	 * and it's 3 when support it.
+	 */
+	if (xhci->hci_version < 0x100 && HCC_MAX_PSA(xhci->hcc_params) == 4)
+		xhci->quirks |= XHCI_BROKEN_STREAMS;
 }
 
 /* called during probe() after chip reset completes */
@@ -920,7 +927,8 @@ static int xhci_mtk_probe(struct platform_device *pdev)
 	if (ret)
 		goto put_usb3_hcd;
 
-	if (HCC_MAX_PSA(xhci->hcc_params) >= 4)
+	if (HCC_MAX_PSA(xhci->hcc_params) >= 4 &&
+	    !(xhci->quirks & XHCI_BROKEN_STREAMS))
 		xhci->shared_hcd->can_do_streams = 1;
 
 	ret = usb_add_hcd(xhci->shared_hcd, irq, IRQF_SHARED);
@@ -976,6 +984,7 @@ static int xhci_mtk_remove(struct platform_device *dev)
 	pm_runtime_put_noidle(&dev->dev);
 	pm_runtime_disable(&dev->dev);
 
+<<<<<<< HEAD
 	xhci->xhc_state |= XHCI_STATE_REMOVING;
 
 #if IS_ENABLED(CONFIG_MACH_MT6853)
@@ -985,6 +994,8 @@ static int xhci_mtk_remove(struct platform_device *dev)
 	}
 #endif
 
+=======
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	usb_remove_hcd(shared_hcd);
 	xhci->shared_hcd = NULL;
 	xhci_mtk_phy_power_off(mtk);

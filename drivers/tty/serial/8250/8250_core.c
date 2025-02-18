@@ -1115,6 +1115,7 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
 #ifndef OPLUS_FEATURE_CHG_BASIC
 			ret = uart_add_one_port(&serial8250_reg,
 						&uart->port);
+<<<<<<< HEAD
 #else
 			if (boot_with_console() == true) {
 				ret = uart_add_one_port(&serial8250_reg,
@@ -1126,6 +1127,12 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
 #endif /*OPLUS_FEATURE_CHG_BASIC*/
 			if (ret == 0)
 				ret = uart->port.line;
+=======
+			if (ret)
+				goto err;
+
+			ret = uart->port.line;
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 		} else {
 			dev_info(uart->port.dev,
 				"skipping CIR port at 0x%lx / 0x%llx, IRQ %d\n",
@@ -1149,6 +1156,11 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
 
 	mutex_unlock(&serial_mutex);
 
+	return ret;
+
+err:
+	uart->port.dev = NULL;
+	mutex_unlock(&serial_mutex);
 	return ret;
 }
 EXPORT_SYMBOL(serial8250_register_8250_port);
@@ -1188,6 +1200,7 @@ void serial8250_unregister_port(int line)
 		uart->port.type = PORT_UNKNOWN;
 		uart->port.dev = &serial8250_isa_devs->dev;
 		uart->capabilities = 0;
+		serial8250_init_port(uart);
 		serial8250_apply_quirks(uart);
 #ifndef OPLUS_FEATURE_CHG_BASIC
 		uart_add_one_port(&serial8250_reg, &uart->port);

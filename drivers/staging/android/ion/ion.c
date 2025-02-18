@@ -472,9 +472,28 @@ static void ion_buffer_get(struct ion_buffer *buffer)
 	kref_get(&buffer->ref);
 }
 
+<<<<<<< HEAD
 static int ion_buffer_put(struct ion_buffer *buffer)
 {
 	return kref_put(&buffer->ref, _ion_buffer_destroy);
+=======
+	if (buffer->kmap_cnt) {
+		if (buffer->kmap_cnt == INT_MAX)
+			return ERR_PTR(-EOVERFLOW);
+
+		buffer->kmap_cnt++;
+		return buffer->vaddr;
+	}
+	vaddr = buffer->heap->ops->map_kernel(buffer->heap, buffer);
+	if (WARN_ONCE(!vaddr,
+		      "heap->ops->map_kernel should return ERR_PTR on error"))
+		return ERR_PTR(-EINVAL);
+	if (IS_ERR(vaddr))
+		return vaddr;
+	buffer->vaddr = vaddr;
+	buffer->kmap_cnt++;
+	return vaddr;
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 }
 
 static void ion_buffer_add_to_handle(struct ion_buffer *buffer)
@@ -740,6 +759,7 @@ struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
 			       size_t align, unsigned int heap_id_mask,
 			       unsigned int flags, bool grab_handle)
 {
+<<<<<<< HEAD
 	struct ion_handle *handle;
 	struct ion_device *dev = client->dev;
 	struct ion_buffer *buffer = NULL;
@@ -1892,11 +1912,17 @@ static void ion_dma_buf_release(struct dma_buf *dmabuf)
 
 static void *ion_dma_buf_kmap(struct dma_buf *dmabuf, unsigned long offset)
 {
+=======
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	struct ion_buffer *buffer = dmabuf->priv;
 	void *vaddr;
 
 	if (!buffer->heap->ops->map_kernel) {
+<<<<<<< HEAD
 		IONMSG("%s: map kernel is not implemented by this heap.\n",
+=======
+		pr_err("%s: map kernel is not implemented by this heap.\n",
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 		       __func__);
 		return ERR_PTR(-ENOTTY);
 	}
@@ -1906,6 +1932,7 @@ static void *ion_dma_buf_kmap(struct dma_buf *dmabuf, unsigned long offset)
 
 	if (IS_ERR(vaddr))
 		return vaddr;
+<<<<<<< HEAD
 
 	return vaddr + offset * PAGE_SIZE;
 }
@@ -2040,12 +2067,27 @@ static struct dma_buf *__ion_share_dma_buf(struct ion_client *client,
 	mutex_unlock(&dmabuf_list.lock);
 
 	return dmabuf;
+=======
+
+	return vaddr + offset * PAGE_SIZE;
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 }
 
 struct dma_buf *ion_share_dma_buf(struct ion_client *client,
 				  struct ion_handle *handle)
 {
+<<<<<<< HEAD
 	return __ion_share_dma_buf(client, handle, true);
+=======
+	struct ion_buffer *buffer = dmabuf->priv;
+
+	if (buffer->heap->ops->map_kernel) {
+		mutex_lock(&buffer->lock);
+		ion_buffer_kmap_put(buffer);
+		mutex_unlock(&buffer->lock);
+	}
+
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 }
 
 EXPORT_SYMBOL(ion_share_dma_buf);
@@ -2053,6 +2095,7 @@ EXPORT_SYMBOL(ion_share_dma_buf);
 static int __ion_share_dma_buf_fd(struct ion_client *client,
 				  struct ion_handle *handle, bool lock_client)
 {
+<<<<<<< HEAD
 	struct dma_buf *dmabuf;
 	int fd;
 
@@ -2071,6 +2114,15 @@ static int __ion_share_dma_buf_fd(struct ion_client *client,
 	if (fd < 0) {
 		IONMSG("%s dma_buf_fd failed %d.\n", __func__, fd);
 		dma_buf_put(dmabuf);
+=======
+	struct ion_buffer *buffer = dmabuf->priv;
+	struct ion_dma_buf_attachment *a;
+
+	mutex_lock(&buffer->lock);
+	list_for_each_entry(a, &buffer->attachments, list) {
+		dma_sync_sg_for_cpu(a->dev, a->table->sgl, a->table->nents,
+				    direction);
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	}
 	handle->dbg.fd = fd;
 	return fd;
@@ -2089,6 +2141,7 @@ int ion_share_dma_buf_fd_nolock(struct ion_client *client,
 	return __ion_share_dma_buf_fd(client, handle, false);
 }
 
+<<<<<<< HEAD
 struct ion_handle *ion_import_dma_buf(struct ion_client *client,
 				      struct dma_buf *dmabuf)
 {
@@ -2120,6 +2173,12 @@ struct ion_handle *ion_import_dma_buf(struct ion_client *client,
 		IONMSG("%s handle is error 0x%lx.\n",
 		       __func__, (unsigned long)handle);
 		goto end;
+=======
+	mutex_lock(&buffer->lock);
+	list_for_each_entry(a, &buffer->attachments, list) {
+		dma_sync_sg_for_device(a->dev, a->table->sgl, a->table->nents,
+				       direction);
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 	}
 
 	ret = ion_handle_add(client, handle);

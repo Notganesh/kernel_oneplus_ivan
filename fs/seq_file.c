@@ -29,7 +29,11 @@ static void *seq_buf_alloc(unsigned long size)
 	if (unlikely(size > MAX_RW_COUNT))
 		return NULL;
 
+<<<<<<< HEAD
 	return kvmalloc(size, GFP_KERNEL_ACCOUNT);
+=======
+	return kvmalloc(size, GFP_KERNEL);
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 }
 
 /**

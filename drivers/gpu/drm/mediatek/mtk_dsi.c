@@ -2161,11 +2161,19 @@ static void mtk_dsi_exit_ulps(struct mtk_dsi *dsi)
 		}
 	}
 
+<<<<<<< HEAD
 	/* reset related setting */
 	mtk_dsi_mask(dsi, DSI_INTEN, SLEEPOUT_DONE_INT_FLAG, 0);
 	mtk_dsi_mask(dsi, DSI_PHY_LD0CON, LDX_ULPM_AS_L0, 0);
 	mtk_dsi_mask(dsi, DSI_MODE_CTRL, SLEEP_MODE, 0);
 	mtk_dsi_mask(dsi, DSI_START, SLEEPOUT_START, 0);
+=======
+	mtk_dsi_reset_engine(dsi);
+	mtk_dsi_lane0_ulp_mode_enter(dsi);
+	mtk_dsi_clk_ulp_mode_enter(dsi);
+	/* set the lane number as 0 to pull down mipi */
+	writel(0, dsi->regs + DSI_TXRX_CTRL);
+>>>>>>> ecca894374699ee2ea42cb5f10e6af66d51bc4b6
 
 	/* do DSI reset after exit ULPS */
 	mtk_dsi_reset_engine(dsi);
