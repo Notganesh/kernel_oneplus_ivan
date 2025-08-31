@@ -1,3 +1,4 @@
+
 /*
  * INET		An implementation of the TCP/IP protocol suite for the LINUX
  *		operating system.  INET is implemented using the  BSD Socket
@@ -2041,6 +2042,7 @@ static bool tcp_can_coalesce_send_queue_head(struct sock *sk, int len)
 
 	skb = tcp_send_head(sk);
 	//#ifdef OPLUS_BUG_STABILITY
+	//#KangYi@CN.WiFi.Network., 2021/06/02, add for stability bug
 	if ( !skb )
 	{
 		return false;
@@ -2527,6 +2529,10 @@ void tcp_send_loss_probe(struct sock *sk)
 	int pcount;
 	int mss = tcp_current_mss(sk);
 
+	/* At most one outstanding TLP */
+	if (tp->tlp_high_seq)
+		goto rearm_timer;
+
 	skb = tcp_send_head(sk);
 	if (skb) {
 		if (tcp_snd_wnd_test(tp, skb, mss)) {
@@ -2549,10 +2555,6 @@ void tcp_send_loss_probe(struct sock *sk)
 		return;
 	}
 
-	/* At most one outstanding TLP retransmission. */
-	if (tp->tlp_high_seq)
-		goto rearm_timer;
-
 	if (skb_still_in_host_queue(sk, skb))
 		goto rearm_timer;
 
@@ -2573,10 +2575,10 @@ void tcp_send_loss_probe(struct sock *sk)
 	if (__tcp_retransmit_skb(sk, skb, 1))
 		goto rearm_timer;
 
+probe_sent:
 	/* Record snd_nxt for loss detection. */
 	tp->tlp_high_seq = tp->snd_nxt;
 
-probe_sent:
 	NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPLOSSPROBES);
 	/* Reset s.t. tcp_rearm_rto will restart timer from now */
 	inet_csk(sk)->icsk_pending = 0;
@@ -2880,9 +2882,6 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned int cur_mss;
 	int diff, len, err;
-
-	//Add for TCP Retransmit info send to user space.
-	oplus_handle_retransmit(sk, 1);
 	int avail_wnd;
 
 	/* Inconclusive MTU probe */
@@ -2963,7 +2962,7 @@ start:
 	segs = tcp_skb_pcount(skb);
 	TCP_ADD_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS, segs);
 	if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_SYN)
-		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
+		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
 	tp->total_retrans += segs;
 
 	/* make sure skb->data is aligned on arches that require it
@@ -3834,10 +3833,6 @@ int tcp_rtx_synack(const struct sock *sk, struct request_sock *req)
 	res = af_ops->send_synack(sk, NULL, &fl, req, NULL, TCP_SYNACK_NORMAL);
 	if (!res) {
 		TCP_INC_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS);
-
-		//Add for TCP Retransmit info send to user space.
-		oplus_handle_retransmit(sk, 1);
-
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
 		if (unlikely(tcp_passive_fastopen(sk)))
 			tcp_sk(sk)->total_retrans++;
