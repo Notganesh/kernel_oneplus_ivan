@@ -235,6 +235,14 @@ void release_task(struct task_struct *p)
 {
 	struct task_struct *leader;
 	int zap_leader;
+#ifdef CONFIG_OPLUS_FEATURE_FUSE_FS_SHORTCIRCUIT
+	if (p->fpack) {
+		if (p->fpack->iname)
+			__putname(p->fpack->iname);
+		kfree(p->fpack);
+		p->fpack = NULL;
+	}
+#endif /* CONFIG_OPLUS_FEATURE_FUSE_FS_SHORTCIRCUIT */
 repeat:
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials. But shut RCU-lockdep up */
@@ -419,6 +427,22 @@ static bool has_stopped_jobs(struct pid *pgrp)
 	return false;
 }
 
+#ifdef OPLUS_BUG_STABILITY
+static bool oplus_is_android_core_group(struct pid *pgrp)
+{
+    struct task_struct *p;
+
+    do_each_pid_task(pgrp, PIDTYPE_PGID, p) {
+        if (( !strcmp(p->comm, "zygote") ) || ( !strcmp(p->comm, "main")) ) {
+            printk("oplus_is_android_core_group: find zygote will be hungup, ignore it \n");
+            return true;
+        }
+    } while_each_pid_task(pgrp, PIDTYPE_PGID, p);
+
+    return false;
+}
+#endif /*OPLUS_BUG_STABILITY*/
+
 /*
  * Check to see if any process groups have become orphaned as
  * a result of our exiting, and if they have any stopped jobs,
@@ -601,17 +625,9 @@ static void exit_mm(void)
 	enter_lazy_tlb(mm, current);
 	task_unlock(current);
 	mm_update_next_owner(mm);
-#if defined(OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY) && defined(CONFIG_OPLUS_HEALTHINFO) && defined(CONFIG_VIRTUAL_RESERVE_MEMORY)
-	//Trigger and upload the event.
-	trigger_svm_oom_event(mm, false, false);
-#endif
 	mmput(mm);
-#ifdef CONFIG_ANDROID_SIMPLE_LMK
-	clear_thread_flag(TIF_MEMDIE);
-#else
 	if (test_thread_flag(TIF_MEMDIE))
 		exit_oom_victim();
-#endif
 }
 
 static struct task_struct *find_alive_thread(struct task_struct *p)
@@ -833,10 +849,44 @@ static void check_stack_usage(void)
 static inline void check_stack_usage(void) {}
 #endif
 
+#ifdef OPLUS_BUG_STABILITY
+static bool is_zygote_process(struct task_struct *t)
+{
+	const struct cred *tcred = __task_cred(t);
+
+	struct task_struct * first_child = NULL;
+	if(t->children.next && t->children.next != (struct list_head*)&t->children.next)
+		first_child = container_of(t->children.next, struct task_struct, sibling);
+	if(!strcmp(t->comm, "main") && (tcred->uid.val == 0) && (t->parent != 0 && !strcmp(t->parent->comm,"init"))  )
+		return true;
+	else
+		return false;
+	return false;
+}
+
+static bool is_critial_process(struct task_struct *t) {
+    if(t->group_leader && (!strcmp(t->group_leader->comm, "system_server") || is_zygote_process(t) || !strcmp(t->group_leader->comm, "surfaceflinger") || !strcmp(t->group_leader->comm, "servicemanager")))
+    {
+       if (t->pid == t->tgid)
+       {
+          return true;
+       }
+       else
+       {
+          return false;
+       }
+    } else {
+        return false;
+    }
+
+}
+#endif /*OPLUS_BUG_STABILITY*/
+
 void __noreturn do_exit(long code)
 {
 	struct task_struct *tsk = current;
 	int group_dead;
+
 #ifdef OPLUS_BUG_STABILITY
     if (is_critial_process(tsk)) {
         printk("critical svc %d:%s exit with %ld !\n", tsk->pid, tsk->comm,code);
@@ -872,10 +922,6 @@ void __noreturn do_exit(long code)
 			preempt_count());
 		preempt_count_set(PREEMPT_ENABLED);
 	}
-
-#ifdef CONFIG_OPLUS_FEATURE_UID_PERF
-	uid_check_out_pevent(tsk);
-#endif
 
 	profile_task_exit(tsk);
 	kcov_task_exit(tsk);
